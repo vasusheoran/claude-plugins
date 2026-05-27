@@ -1,0 +1,27 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "vasusheoran-plugins",
+  "description": "Personal Claude Code plugins — homelab infrastructure management, documentation, and ops tooling",
+  "owner": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "homelab",
+      "description": "Homelab management plugin for Proxmox, self-hosted services, and Cloudflare tunnel infrastructure. Provides commands for session handoffs and ops documentation.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/vasusheoran/claude-plugins.git",
+        "path": "plugins/homelab",
+        "ref": "main",
+        "sha": "f9f337600ad8b6fd90abd10a25db52a52673fee2"
+      },
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
+    }
+  ]
+}
