@@ -8,6 +8,22 @@
   },
   "plugins": [
     {
+      "name": "statusline",
+      "description": "Claude Code status line showing model, 5h rate limit (progress bar), 7d rate limit (%), and context window usage (%).",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/vasusheoran/claude-plugins.git",
+        "path": "plugins/statusline",
+        "ref": "main",
+        "sha": "main"
+      },
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/statusline"
+    },
+    {
       "name": "homelab",
       "description": "Homelab management plugin for Proxmox, self-hosted services, and Cloudflare tunnel infrastructure. Provides commands for session handoffs and ops documentation.",
       "author": {

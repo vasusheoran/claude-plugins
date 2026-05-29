@@ -26,6 +26,21 @@ Personal [Claude Code](https://claude.ai/code) plugins by [@vasusheoran](https:/
 
 ## Plugins
 
+### `statusline`
+
+Claude Code status line — model, 5h rate limit (progress bar), 7d rate limit (%), context window usage (%).
+
+| Command | Description |
+|---------|-------------|
+| `/statusline:setup` | Install or reinstall the status line script and wire it into settings |
+
+**Install individually:**
+```
+/plugin install statusline
+```
+
+---
+
 ### `homelab`
 
 Homelab infrastructure management — Proxmox, self-hosted services, Cloudflare tunnels.
@@ -57,10 +72,17 @@ claude-plugins/
 │   └── marketplace.json       ← marketplace registration
 ├── README.md
 └── plugins/
-    └── homelab/               ← homelab plugin
+    ├── homelab/
+    │   ├── .claude-plugin/
+    │   │   └── plugin.json
+    │   ├── README.md
+    │   └── commands/
+    │       └── handoff.md
+    └── statusline/
         ├── .claude-plugin/
         │   └── plugin.json
         ├── README.md
-        └── commands/
-            └── handoff.md
+        └── skills/
+            └── setup/
+                └── SKILL.md
 ```

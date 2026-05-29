@@ -1,0 +1,8 @@
+{
+  "name": "statusline",
+  "description": "Claude Code status line configuration — model, 5h/7d rate limits, context window usage",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}
