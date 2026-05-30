@@ -1,0 +1,8 @@
+{
+  "name": "homelab",
+  "description": "Homelab management plugin — infrastructure ops, session handoffs, behavioral guidelines, and statusline setup",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}

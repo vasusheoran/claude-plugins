@@ -1,8 +1,0 @@
-{
-  "name": "homelab",
-  "description": "Homelab management and documentation plugin for Proxmox, self-hosted services, and infrastructure",
-  "author": {
-    "name": "Vasu Sheoran",
-    "email": "vasusheoran92@gmail.com"
-  }
-}
