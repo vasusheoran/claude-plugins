@@ -1,5 +1,5 @@
 ---
-description: Generate a homelab session handoff document in homelab/docs/
+description: Generate a homelab session handoff document in docs/
 ---
 
 Generate a structured handoff document summarising this homelab session.
@@ -15,7 +15,7 @@ Generate a structured handoff document summarising this homelab session.
    - Ask the user using AskUserQuestion with two options:
      - **Suggested name** — show the suggested filename in the option description
      - **Custom name** — the user provides their own filename via the "Other" free-text option
-   - All files go in the `homelab/docs/` directory (create it if it doesn't exist).
+   - All files go in the `docs/` directory (create it if it doesn't exist).
 5. Write the handoff document to the chosen path with the sections below.
 
 ## Required Sections
@@ -51,4 +51,4 @@ Generate a structured handoff document summarising this homelab session.
 - Include actual IPs, CTIDs, hostnames, and service names — this is an ops doc, specifics matter.
 - If a service is now reachable via a public URL, note it explicitly.
 - If there are no changes to report for a section, write "None" rather than omitting it.
-- Always create the `homelab/docs/` directory if it doesn't exist.
+- Always create the `docs/` directory if it doesn't exist.
