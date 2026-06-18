@@ -17,7 +17,7 @@
 
   var hasServer = location.protocol.startsWith("http");
   var LS = "visual-plan::" + location.pathname;
-  var state = { comments: [], answers: [], approval: { state: null, note: "" } };
+  var state = { comments: [], answers: [], approval: { state: null, note: "" }, ack: {} };
   var version = {};
 
   /* ----------------------------- storage ----------------------------- */
@@ -45,6 +45,7 @@
       jget("/api/comments").then(function (d) { state.comments = d.comments || []; }),
       jget("/api/answers").then(function (d) { state.answers = d.answers || []; }),
       jget("/api/approval").then(function (d) { state.approval = d; }),
+      jget("/api/ack").then(function (d) { state.ack = d || {}; }),
       jget("/api/version").then(function (d) { version = d; }),
     ]);
   }
@@ -101,6 +102,107 @@
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* --------------------- element picker ("mark" mode) ---------------- */
+
+  // The "mark" toggle turns the cursor into an element picker (like the browser
+  // inspector): hovering highlights the element under the cursor and a click
+  // anchors a comment to that exact element. Any element is pickable — a tagged
+  // [data-cmt-id] simply yields a cleaner, more stable anchor.
+  var pickMode = false;
+  var pickOverlay = null;
+
+  function setPickMode(on) {
+    pickMode = on;
+    document.body.classList.toggle("cmt-pick", on);
+    if (!on && pickOverlay) pickOverlay.style.display = "none";
+    renderNav();
+  }
+
+  function isOwnUi(el) {
+    return !el || !el.closest || !!el.closest(
+      "#cmt-nav, .cmt-composer, .cmt-panel, .cmt-pin, #cmt-pick-overlay");
+  }
+
+  function ensureOverlay() {
+    if (!pickOverlay) {
+      pickOverlay = document.createElement("div");
+      pickOverlay.id = "cmt-pick-overlay";
+      pickOverlay.style.display = "none";
+      document.body.appendChild(pickOverlay);
+    }
+    return pickOverlay;
+  }
+
+  // Snap to the nearest tagged component (data-cmt-id) so its comments get a
+  // stable anchor; otherwise the exact element under the cursor.
+  function pickTarget(el) {
+    return (el && el.closest && el.closest("[data-cmt-id]")) || el;
+  }
+
+  document.addEventListener("mousemove", function (e) {
+    if (!pickMode) return;
+    if (isOwnUi(e.target)) { if (pickOverlay) pickOverlay.style.display = "none"; return; }
+    var r = pickTarget(e.target).getBoundingClientRect();
+    var o = ensureOverlay();
+    o.style.display = "block";
+    o.style.left = r.left + "px"; o.style.top = r.top + "px";
+    o.style.width = r.width + "px"; o.style.height = r.height + "px";
+  }, true);
+
+  document.addEventListener("click", function (e) {
+    if (!pickMode || e.altKey || isOwnUi(e.target)) return;
+    e.preventDefault(); e.stopPropagation();
+    openComposer(pickTarget(e.target), null, true);
+  }, true);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && pickMode) setPickMode(false);
+  });
+
+  // A querySelector-able path for an arbitrary element, scoped to its nearest
+  // block. Prefers a stable id / data-cmt-id so anchors survive plan edits.
+  function cssEsc(s) {
+    return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^\w-]/g, "\\$&");
+  }
+  function cssPath(el) {
+    if (el.id) return "#" + cssEsc(el.id);
+    if (el.hasAttribute("data-cmt-id"))
+      return '[data-cmt-id="' + el.getAttribute("data-cmt-id") + '"]';
+    var parts = [];
+    while (el && el.nodeType === 1 && el.tagName !== "BODY") {
+      if (el.hasAttribute("data-block-id")) {
+        parts.unshift('[data-block-id="' + el.getAttribute("data-block-id") + '"]');
+        break;
+      }
+      var sel = el.tagName.toLowerCase();
+      var parent = el.parentElement;
+      if (parent) {
+        var sibs = Array.prototype.filter.call(parent.children, function (c) {
+          return c.tagName === el.tagName;
+        });
+        if (sibs.length > 1) sel += ":nth-of-type(" + (sibs.indexOf(el) + 1) + ")";
+      }
+      parts.unshift(sel);
+      el = parent;
+    }
+    return parts.join(" > ");
+  }
+  function resolveComponent(sel) {
+    if (!sel) return null;
+    try { return document.querySelector(sel); } catch (e) { return null; }
+  }
+
+  function renderTargets() {                      // outline elements that HAVE comments
+    document.querySelectorAll(".cmt-target").forEach(function (el) {
+      el.classList.remove("cmt-target");
+    });
+    state.comments.forEach(function (c) {
+      if (!c.componentId || c.parentId != null) return;
+      var el = resolveComponent(c.componentId);
+      if (el) el.classList.toggle("cmt-target", c.status !== "resolved");
     });
   }
 
@@ -184,32 +286,88 @@
 
   /* ----------------------------- composer ---------------------------- */
 
-  function openComposer(el, anchor) {
-    closeComposer();
-    var quote = anchor ? null : String(window.getSelection ? window.getSelection() : "").trim();
+  var activeComposer = null;
+
+  // Drafts: unsubmitted text is kept (per anchor) in localStorage so clicking
+  // away never loses it; it is restored when the same spot is reopened.
+  function draftKey(i) {
+    return "visual-plan-draft::" + location.pathname + "::" +
+      (i.componentId ? "c:" + i.componentId
+        : i.anchor ? "p:" + i.blockId + ":" + i.anchor.x + "," + i.anchor.y
+        : i.quote ? "q:" + i.blockId + ":" + i.quote.slice(0, 40)
+        : "b:" + i.blockId);
+  }
+  function loadDraft(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function saveDraft(k, v) {
+    try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {}
+  }
+
+  // el is a [data-block-id] section, or any element when asComponent is true.
+  function openComposer(el, anchor, asComponent) {
+    closeComposer(true);                          // stash any in-progress draft
+    var isComponent = !!asComponent && el && el.nodeType === 1 && el.tagName !== "BODY";
+    var host = (el.closest && el.closest("[data-block-id]")) || el;
+    var blockId = (host.getAttribute && host.getAttribute("data-block-id")) || "";
+    var blockLabel = (host.getAttribute && host.getAttribute("data-block-label")) || blockId;
+    var componentId = isComponent ? cssPath(el) : null;
+    var componentLabel = isComponent
+      ? (el.getAttribute("data-cmt-label")
+         || (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60)
+         || el.tagName.toLowerCase())
+      : null;
+    var quote = (!anchor && !isComponent)
+      ? String(window.getSelection ? window.getSelection() : "").trim() : null;
+
+    var dkey = draftKey({ componentId: componentId, anchor: anchor, quote: quote, blockId: blockId });
+    var ctx = componentLabel ? "◉ " + escapeHtml(componentLabel)
+      : anchor ? "📍 pinned point"
+      : quote ? "❝ " + escapeHtml(quote.slice(0, 200))
+      : escapeHtml(blockLabel);
+
     var box = document.createElement("div");
     box.className = "cmt-composer";
     box.innerHTML =
-      (anchor ? '<div class="quote">📍 pinned point</div>' : "") +
-      (quote ? '<div class="quote">“' + escapeHtml(quote.slice(0, 200)) + "”</div>" : "") +
+      '<div class="quote">' + ctx + "</div>" +
       '<textarea placeholder="What should change here?"></textarea>' +
-      '<div class="actions"><button class="cmt-btn cancel">Cancel</button>' +
-      '<button class="cmt-btn primary save">Comment</button></div>';
-    el.appendChild(box);
-    var ta = box.querySelector("textarea"); ta.focus();
-    box.querySelector(".cancel").addEventListener("click", closeComposer);
-    box.querySelector(".save").addEventListener("click", function () {
+      '<div class="actions">' +
+        '<button class="cmt-btn add">Add comment</button>' +
+        '<button class="cmt-btn primary submit">Submit</button>' +
+      "</div>";
+    (host.appendChild ? host : document.body).appendChild(box);
+    var ta = box.querySelector("textarea");
+    ta.value = loadDraft(dkey); ta.focus();
+    activeComposer = { box: box, ta: ta, dkey: dkey };
+
+    function save(target) {
       var body = ta.value.trim(); if (!body) return;
+      activeComposer = null; saveDraft(dkey, ""); box.remove();
       addComment({
-        blockId: el.getAttribute("data-block-id"),
-        blockLabel: el.getAttribute("data-block-label") || el.getAttribute("data-block-id"),
-        quote: quote || null, anchor: anchor || null, body: body,
-      }).then(function () { closeComposer(); refreshAll(); });
-    });
+        blockId: blockId, blockLabel: blockLabel,
+        componentId: componentId, componentLabel: componentLabel,
+        quote: quote || null, anchor: anchor || null,
+        target: target, body: body,
+      }).then(refreshAll);
+    }
+    box.querySelector(".add").addEventListener("click", function () { save("human"); });
+    box.querySelector(".submit").addEventListener("click", function () { save("agent"); });
   }
-  function closeComposer() {
-    var c = document.querySelector(".cmt-composer"); if (c) c.remove();
+
+  // Close the composer; with save=true, an unsubmitted body is kept as a draft.
+  function closeComposer(save) {
+    if (!activeComposer) {
+      var stray = document.querySelector(".cmt-composer"); if (stray) stray.remove();
+      return;
+    }
+    var ac = activeComposer; activeComposer = null;
+    if (save) saveDraft(ac.dkey, ac.ta.value.trim());
+    ac.box.remove();
   }
+
+  // Clicking anywhere outside the composer closes it (keeping a draft).
+  document.addEventListener("mousedown", function (e) {
+    if (!activeComposer || activeComposer.box.contains(e.target)) return;
+    closeComposer(true);
+  }, true);
 
   /* -------------------------- question blocks ------------------------ */
 
@@ -238,7 +396,7 @@
           host.querySelector(".qsave").addEventListener("click", function () {
             var v = host.querySelector("textarea").value.trim();
             upsertAnswer({ questionId: qid, questionLabel: label, mode: mode, value: v })
-              .then(function () { renderQuestions(); renderLauncher(); });
+              .then(function () { renderQuestions(); renderNav(); });
           });
         }
         if (saved && document.activeElement !== host.querySelector("textarea")) {
@@ -263,7 +421,7 @@
                 if (at === -1) value.push(val); else value.splice(at, 1);
               } else { value = val; }
               upsertAnswer({ questionId: qid, questionLabel: label, mode: mode, value: value })
-                .then(function () { renderQuestions(); renderLauncher(); });
+                .then(function () { renderQuestions(); renderNav(); });
             });
           }
         });
@@ -278,10 +436,16 @@
   function commentNode(c) {
     var resolved = c.status === "resolved";
     var replies = repliesOf(c.id);
+    var isAgent = (c.target || "agent") === "agent";
     return '<div class="cmt-item ' + (resolved ? "resolved" : "") + '" data-cid="' + c.id + '">' +
       '<div class="where"><span class="cmt-status-dot"></span>' +
       escapeHtml(c.blockLabel || c.blockId) +
-      (c.anchor ? " · 📍" : c.quote ? " · ❝" : "") + "</div>" +
+      (c.componentLabel ? " › " + escapeHtml(c.componentLabel) : "") +
+      (c.componentId ? " · ◉" : c.anchor ? " · 📍" : c.quote ? " · ❝" : "") + "</div>" +
+      (c.parentId == null
+        ? '<span class="cmt-tag ' + (isAgent ? "agent" : "human") + '">' +
+          (isAgent ? "→ Claude" : "note") + "</span>"
+        : "") +
       (c.quote ? '<div class="meta">“' + escapeHtml(c.quote.slice(0, 120)) + "”</div>" : "") +
       "<div>" + escapeHtml(c.body) + "</div>" +
       '<div class="meta">' + escapeHtml((c.createdAt || "").slice(0, 16).replace("T", " ")) + "</div>" +
@@ -301,7 +465,7 @@
     var tops = state.comments.filter(function (c) { return c.parentId == null; });
     var items = tops.map(commentNode).join("") ||
       '<p style="padding:16px;color:#6b7280">No comments yet. Hover a section and click 💬, ' +
-      'select text to quote it, or Alt-click to pin a point.</p>';
+      'select text to quote it, Alt-click to pin a point, or click <b>mark</b> then any element.</p>';
     p.innerHTML =
       "<header><span>Review · " + openCount() + " open</span>" +
       '<button class="cmt-btn" id="cmt-close">Close</button></header>' +
@@ -322,7 +486,8 @@
         e.stopPropagation(); openReply(it, cid);
       };
       it.onclick = function () {
-        var c = byId(cid); var el = blockEl(c.blockId);
+        var c = byId(cid);
+        var el = (c.componentId && resolveComponent(c.componentId)) || blockEl(c.blockId);
         if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
       };
     });
@@ -358,39 +523,70 @@
 
   /* --------------------------- approval gate ------------------------- */
 
-  function renderApproval() {
-    var bar = document.getElementById("cmt-approval") || document.createElement("div");
-    bar.id = "cmt-approval"; bar.className = "cmt-approval";
-    var s = state.approval && state.approval.state;
-    var statusHtml = s
-      ? '<span class="appr-state ' + s + '">' +
-        (s === "approved" ? "✓ Approved" : "✎ Changes requested") +
-        (state.approval.note ? " — " + escapeHtml(state.approval.note) : "") + "</span>"
-      : '<span class="appr-state none">Awaiting review</span>';
-    bar.innerHTML = statusHtml +
-      '<span class="wf-spacer"></span>' +
-      '<input class="appr-note" placeholder="optional note" value="' +
-        escapeHtml((state.approval && state.approval.note) || "") + '">' +
-      '<button class="cmt-btn changes">Request changes</button>' +
-      '<button class="cmt-btn primary approve">Approve</button>';
-    if (!bar.parentNode) document.body.appendChild(bar);
-    var note = function () { return bar.querySelector(".appr-note").value.trim(); };
-    bar.querySelector(".approve").onclick = function () { setApproval("approved", note()).then(refreshAll); };
-    bar.querySelector(".changes").onclick = function () { setApproval("changes-requested", note()).then(refreshAll); };
+  // Open top-level comments addressed to Claude — the implicit "change requests".
+  function openAgentCount() {
+    return state.comments.filter(function (c) {
+      return c.parentId == null && c.status !== "resolved" &&
+        (c.target || "agent") === "agent";
+    }).length;
   }
 
-  /* ----------------------------- launcher ---------------------------- */
+  /* ------------------------------- top nav --------------------------- */
 
-  function renderLauncher() {
-    var b = document.getElementById("cmt-launcher") || document.createElement("button");
-    b.id = "cmt-launcher"; b.className = "cmt-launcher";
-    b.innerHTML = "Comments <span class=\"count\">" + openCount() + "</span>";
-    b.onclick = function () { document.getElementById("cmt-panel").classList.toggle("open"); };
-    if (!b.parentNode) document.body.appendChild(b);
+  function markIcon() {                            // small pin glyph for "mark"
+    return '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">' +
+      '<path d="M8 1.4a4.2 4.2 0 0 0-4.2 4.2c0 3 4.2 8.8 4.2 8.8s4.2-5.8 4.2-8.8' +
+      'A4.2 4.2 0 0 0 8 1.4Z" fill="currentColor"/>' +
+      '<circle cx="8" cy="5.6" r="1.6" fill="#fff"/></svg>';
+  }
+
+  function renderNav() {
+    // don't clobber the note field mid-typing
+    var ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains("appr-note")) return;
+    var nav = document.getElementById("cmt-nav") || document.createElement("div");
+    nav.id = "cmt-nav"; nav.className = "cmt-nav";
+    var appr = state.approval || {};
+    var s = appr.state;
+    var ack = state.ack || {};
+    // the agent's ack counts only if it acknowledges THIS submission
+    var acked = !!(ack.ackedAt && appr.decidedAt && ack.decidedAt === appr.decidedAt);
+    var pending = openAgentCount();
+    var statusHtml = s
+      ? '<span class="appr-state ' + s + '">' +
+        (s === "approved" ? "✓ Approved" : "✎ Changes requested") + "</span>"
+      : '<span class="appr-state none">Not submitted</span>';
+    var hint = !s
+      ? (pending ? pending + " for Claude → changes requested" : "no open items → approved")
+      : acked
+        ? "✓ acknowledged by " + escapeHtml(ack.by || "Claude") +
+          (ack.message ? " — " + escapeHtml(ack.message) : "")
+        : "submitted · awaiting Claude…";
+    nav.innerHTML =
+      '<button class="cmt-nav-btn mark' + (pickMode ? " active" : "") + '" id="cmt-mark" ' +
+        'title="mark" aria-label="mark">' + markIcon() + "</button>" +
+      '<button class="cmt-nav-btn" id="cmt-comments">Comments ' +
+        '<span class="count">' + openCount() + "</span></button>" +
+      '<span class="cmt-nav-spacer"></span>' +
+      statusHtml + '<span class="appr-hint' + (acked ? " acked" : "") + '">' + hint + "</span>" +
+      '<input class="appr-note" placeholder="note (optional)" value="' +
+        escapeHtml((state.approval && state.approval.note) || "") + '">' +
+      '<button class="cmt-btn primary submit-review">Submit review</button>';
+    if (!nav.parentNode) document.body.appendChild(nav);
+    nav.querySelector("#cmt-mark").onclick = function () { setPickMode(!pickMode); };
+    nav.querySelector("#cmt-comments").onclick = function () {
+      var p = document.getElementById("cmt-panel"); if (p) p.classList.toggle("open");
+    };
+    var note = function () { return nav.querySelector(".appr-note").value.trim(); };
+    nav.querySelector(".submit-review").onclick = function () {
+      setApproval(pending ? "changes-requested" : "approved", note()).then(refreshAll);
+    };
   }
 
   function renderAll() {
-    decorateBlocks(); renderQuestions(); renderPanel(); renderApproval(); renderLauncher();
+    decorateBlocks(); renderQuestions();
+    renderPanel(); renderNav();
+    renderTargets();
   }
   function refreshAll() { return loadAll().then(renderAll); }
 
@@ -402,7 +598,7 @@
       if (v.plan && version.plan && v.plan !== version.plan) {
         location.reload(); return;             // plan body changed → reload
       }
-      var changed = ["comments", "answers", "approval"].some(function (k) {
+      var changed = ["comments", "answers", "approval", "ack"].some(function (k) {
         return v[k] !== version[k];
       });
       version = v;

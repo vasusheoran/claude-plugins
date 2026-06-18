@@ -68,6 +68,21 @@ class CommentStoreTests(TmpDirCase):
         self.assertEqual(c["blockLabel"], "Data model")
         self.assertEqual(c["quote"], "user_id is a string")
 
+    def test_add_preserves_component_fields(self):
+        # A comment can anchor to a specific element (data-cmt-id) and choose
+        # whether it is just a note ("human") or an action item ("agent").
+        c = serve.CommentStore(self.tmp / "comments.json").add({
+            "blockId": "dataflow",
+            "blockLabel": "Data flow",
+            "componentId": "submit",
+            "componentLabel": "Submit button",
+            "target": "human",
+            "body": "rename this box",
+        })
+        self.assertEqual(c["componentId"], "submit")
+        self.assertEqual(c["componentLabel"], "Submit button")
+        self.assertEqual(c["target"], "human")
+
     def test_comments_survive_reload(self):
         path = self.tmp / "comments.json"
         serve.CommentStore(path).add({"blockId": "a", "body": "first"})
@@ -250,6 +265,30 @@ class ApprovalStoreTests(TmpDirCase):
 
 
 # ---------------------------------------------------------------------------
+# AckStore: the agent's acknowledgement of a submission (durable, not a UI flash)
+# ---------------------------------------------------------------------------
+
+class AckStoreTests(TmpDirCase):
+    def test_unset_ack_is_empty(self):
+        a = serve.AckStore(self.tmp / "ack.json").get()
+        self.assertIsNone(a["ackedAt"])
+        self.assertIsNone(a["decidedAt"])
+
+    def test_set_records_the_acknowledged_submission(self):
+        s = serve.AckStore(self.tmp / "ack.json")
+        a = s.set("2026-06-18T21:10:48Z", by="Claude", message="seen, acting")
+        self.assertEqual(a["decidedAt"], "2026-06-18T21:10:48Z")
+        self.assertEqual(a["by"], "Claude")
+        self.assertEqual(a["message"], "seen, acting")
+        self.assertTrue(a["ackedAt"])
+
+    def test_persist_reload(self):
+        p = self.tmp / "ack.json"
+        serve.AckStore(p).set("2026-06-18T21:10:48Z")
+        self.assertEqual(serve.AckStore(p).get()["decidedAt"], "2026-06-18T21:10:48Z")
+
+
+# ---------------------------------------------------------------------------
 # New HTTP endpoints: replies/reopen, answers, approval, version (live-refresh)
 # ---------------------------------------------------------------------------
 
@@ -294,6 +333,20 @@ class NewHttpTests(TmpDirCase):
         self.assertEqual(status, 200)
         _, data = _req("GET", f"{self.base}/api/approval")
         self.assertEqual(data["state"], "approved")
+
+    def test_ack_roundtrip(self):
+        _, empty = _req("GET", f"{self.base}/api/ack")
+        self.assertIsNone(empty["ackedAt"])
+        status, _ = _req("POST", f"{self.base}/api/ack",
+                         {"decidedAt": "2026-06-18T21:10:48Z", "message": "on it"})
+        self.assertEqual(status, 200)
+        _, data = _req("GET", f"{self.base}/api/ack")
+        self.assertEqual(data["decidedAt"], "2026-06-18T21:10:48Z")
+        self.assertEqual(data["message"], "on it")
+
+    def test_version_includes_ack(self):
+        _, v = _req("GET", f"{self.base}/api/version")
+        self.assertIn("ack", v)
 
     def test_version_changes_after_comment(self):
         _, v1 = _req("GET", f"{self.base}/api/version")

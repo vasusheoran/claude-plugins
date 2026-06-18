@@ -63,6 +63,42 @@ Reserve `annotated` for code that needs margin notes; use bare `<pre>` for
 throwaway snippets. Use `diagram` for two-dimensional relationships, not a
 left-to-right chain unless the relationship is genuinely sequential.
 
+## Component-level comments (the "mark" picker)
+
+The top nav carries the whole review UI — **mark · Comments · Submit review** —
+so you don't author any comment affordances. Clicking **mark** turns the cursor
+into an element picker (inspector-style): hovering highlights whatever element is
+under it, and a click anchors a comment to that exact element, outlined like a
+Figma/Vercel preview pin. **Any element is pickable** — you don't have to tag
+anything.
+
+Tagging is only about anchor stability. Give an element a stable `data-cmt-id`
+(+ optional `data-cmt-label`) when you want a comment on it to survive your later
+edits to the plan:
+
+```html
+<div class="node" data-cmt-id="flow-ratelimit" data-cmt-label="Rate-limit mw">…</div>
+<button class="wf-pill" data-cmt-id="signup-submit">Create account</button>
+```
+
+- A tagged element anchors as `[data-cmt-id="…"]` — **stable; never renumber it**,
+  exactly like `data-block-id`. Picking anywhere inside it snaps the highlight and
+  the anchor to the tagged element, so its children never produce brittle paths.
+- An **untagged** element anchors by a generated CSS path
+  (`[data-block-id="x"] > .row > .node:nth-of-type(3)`). That's convenient but
+  brittle: if you edit that part of the plan the path can drift, and the comment
+  falls back to listing under its block. So **tag the things you know will be
+  discussed** (diagram nodes, wireframe controls, file rows); free-pick the rest.
+- `data-cmt-label` (optional) — the label shown in the panel; omit it and the
+  element's trimmed text is used.
+
+Composer: each comment is either **Add comment** (a note) or **Submit** (sent to
+Claude as an action item). Clicking away closes the composer and keeps whatever
+was typed as a draft. A single **Submit review** records approval — `approved`
+when no open *Submit*-to-Claude comments remain, else `changes-requested`; the
+agent then acknowledges the submission and the nav shows "acknowledged by Claude".
+You author none of this UI.
+
 ## Open questions (interactive)
 
 Author each genuinely-open decision as an **interactive question block** so the
