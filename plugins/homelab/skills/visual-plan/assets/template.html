@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!--
+  visual-plan scaffold. Copy to plans/<slug>/plan.html and replace the content.
+  Rules:
+   - Every reviewable section is <section class="block" data-block-id="..."
+     data-block-label="...">  so it can be commented on.
+   - data-block-id must be unique and stable (don't renumber on edits).
+   - Keep plan.css / comments.js as sibling files (linked below).
+   - This file is content only — never put CSS/JS inline; edit the shared assets.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PLAN TITLE — Visual Plan</title>
+  <link rel="stylesheet" href="plan.css" />
+</head>
+<body>
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">DRAFT — awaiting review</span>
+      <span>Created 2026-06-18</span>
+      <span>Author: Claude</span>
+      <span>Touches: path/to/area</span>
+    </div>
+
+    <h1>PLAN TITLE</h1>
+
+    <section class="block" data-block-id="outcome" data-block-label="Outcome &amp; scope">
+      <h2>Outcome</h2>
+      <p>One paragraph: what "done" means, who it's for. State the objective and
+         the smallest first cut. <strong>In scope:</strong> … <strong>Non-goals:</strong> …</p>
+    </section>
+
+    <section class="block" data-block-id="approach" data-block-label="Approach">
+      <h2>Approach</h2>
+      <p>Lead with reuse — what existing files/symbols this builds on — then the new delta.</p>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        A settled, hard-to-reverse choice committed to in this plan, with rationale.
+      </div>
+    </section>
+
+    <section class="block" data-block-id="architecture" data-block-label="Architecture">
+      <h2>Architecture</h2>
+      <div class="diagram">
+        <div class="row">
+          <div class="node"><div class="t">Browser</div><div class="s">plan.html</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="t">serve.py</div><div class="s">/api/comments</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="t">comments.json</div><div class="s">on disk</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="changes" data-block-label="Key changes">
+      <h2>Key changes</h2>
+      <div class="file-tree">
+        <div><span class="add">+ path/new_file.py</span> — what it adds</div>
+        <div><span class="mod">~ path/existing.py</span> — what changes</div>
+      </div>
+      <div class="annotated">
+        <pre>def handler(req):
+    return ok(req)</pre>
+        <div class="notes">
+          <div class="note-item"><span class="ln">L1</span> why this signature</div>
+          <div class="note-item"><span class="ln">L2</span> reuses existing ok()</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="risks" data-block-label="Risks &amp; verification">
+      <h2>Risks &amp; verification</h2>
+      <div class="callout risk"><span class="label">Risk</span> What could go wrong + mitigation.</div>
+      <p>End-to-end check that exercises the real workflow (not just unit tests).</p>
+    </section>
+
+    <section class="block" data-block-id="open-questions" data-block-label="Open questions">
+      <h2>Open questions</h2>
+      <ol>
+        <li><strong>Question?</strong> — recommended default + why. (Decide here or leave for review.)</li>
+      </ol>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+</body>
+</html>
