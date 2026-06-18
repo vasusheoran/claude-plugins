@@ -163,5 +163,146 @@ class HttpTests(TmpDirCase):
             httpd.server_close()
 
 
+# ---------------------------------------------------------------------------
+# Threads, reopen, and pin/quote anchors
+# ---------------------------------------------------------------------------
+
+class ThreadAndAnchorTests(TmpDirCase):
+    def test_top_level_comment_has_null_parent(self):
+        store = serve.CommentStore(self.tmp / "comments.json")
+        c = store.add({"blockId": "a", "body": "x"})
+        self.assertIsNone(c["parentId"])
+
+    def test_reply_links_to_parent(self):
+        store = serve.CommentStore(self.tmp / "comments.json")
+        parent = store.add({"blockId": "a", "body": "top"})
+        reply = store.add({"blockId": "a", "body": "re", "parentId": parent["id"]})
+        self.assertEqual(reply["parentId"], parent["id"])
+
+    def test_reopen_sets_status_open(self):
+        store = serve.CommentStore(self.tmp / "comments.json")
+        c = store.add({"blockId": "a", "body": "x"})
+        store.resolve(c["id"])
+        self.assertIs(store.reopen(c["id"]), True)
+        self.assertEqual(store.list()[0]["status"], "open")
+
+    def test_reopen_unknown_id_is_false(self):
+        store = serve.CommentStore(self.tmp / "comments.json")
+        self.assertIs(store.reopen("nope"), False)
+
+    def test_add_preserves_pin_anchor(self):
+        store = serve.CommentStore(self.tmp / "comments.json")
+        c = store.add({"blockId": "diagram", "body": "here",
+                       "anchor": {"x": 40, "y": 55}})
+        self.assertEqual(c["anchor"], {"x": 40, "y": 55})
+
+
+# ---------------------------------------------------------------------------
+# AnswerStore: inline question answers (their question-form analog)
+# ---------------------------------------------------------------------------
+
+class AnswerStoreTests(TmpDirCase):
+    def test_empty(self):
+        self.assertEqual(serve.AnswerStore(self.tmp / "answers.json").list(), [])
+
+    def test_upsert_creates_with_timestamp(self):
+        s = serve.AnswerStore(self.tmp / "answers.json")
+        a = s.upsert({"questionId": "q1", "questionLabel": "Q",
+                      "mode": "single", "value": "sqlite"})
+        self.assertEqual(a["value"], "sqlite")
+        self.assertTrue(a["answeredAt"])
+        self.assertEqual(len(s.list()), 1)
+
+    def test_upsert_replaces_same_question(self):
+        s = serve.AnswerStore(self.tmp / "answers.json")
+        s.upsert({"questionId": "q1", "value": "a"})
+        s.upsert({"questionId": "q1", "value": "b"})
+        self.assertEqual([x["value"] for x in s.list()], ["b"])
+
+    def test_persist_reload(self):
+        p = self.tmp / "answers.json"
+        serve.AnswerStore(p).upsert({"questionId": "q1", "value": "a"})
+        self.assertEqual(serve.AnswerStore(p).list()[0]["value"], "a")
+
+
+# ---------------------------------------------------------------------------
+# ApprovalStore: the explicit approval gate
+# ---------------------------------------------------------------------------
+
+class ApprovalStoreTests(TmpDirCase):
+    def test_unset_state_is_none(self):
+        self.assertIsNone(
+            serve.ApprovalStore(self.tmp / "approval.json").get()["state"])
+
+    def test_set_and_get(self):
+        s = serve.ApprovalStore(self.tmp / "approval.json")
+        s.set("approved", "lgtm")
+        g = s.get()
+        self.assertEqual(g["state"], "approved")
+        self.assertEqual(g["note"], "lgtm")
+        self.assertTrue(g["decidedAt"])
+
+    def test_persist_reload(self):
+        p = self.tmp / "approval.json"
+        serve.ApprovalStore(p).set("changes-requested", "fix x")
+        self.assertEqual(serve.ApprovalStore(p).get()["state"],
+                         "changes-requested")
+
+
+# ---------------------------------------------------------------------------
+# New HTTP endpoints: replies/reopen, answers, approval, version (live-refresh)
+# ---------------------------------------------------------------------------
+
+class NewHttpTests(TmpDirCase):
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "plan.html").write_text("<h1>plan</h1>")
+        self.httpd, port = _start_server(self.tmp)
+        self.base = f"http://127.0.0.1:{port}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        super().tearDown()
+
+    def test_reply_then_reopen(self):
+        _, parent = _req("POST", f"{self.base}/api/comments",
+                         {"blockId": "a", "body": "top"})
+        status, reply = _req("POST", f"{self.base}/api/comments",
+                             {"blockId": "a", "body": "re", "parentId": parent["id"]})
+        self.assertEqual(status, 201)
+        self.assertEqual(reply["parentId"], parent["id"])
+        _req("POST", f"{self.base}/api/comments/{parent['id']}/resolve")
+        status, _ = _req("POST", f"{self.base}/api/comments/{parent['id']}/reopen")
+        self.assertEqual(status, 200)
+        _, listing = _req("GET", f"{self.base}/api/comments")
+        top = [c for c in listing["comments"] if c["id"] == parent["id"]][0]
+        self.assertEqual(top["status"], "open")
+
+    def test_answers_roundtrip(self):
+        status, _ = _req("POST", f"{self.base}/api/answers",
+                         {"questionId": "datastore", "mode": "single", "value": "sqlite"})
+        self.assertEqual(status, 201)
+        _, data = _req("GET", f"{self.base}/api/answers")
+        self.assertEqual(data["answers"][0]["value"], "sqlite")
+
+    def test_approval_roundtrip(self):
+        _, empty = _req("GET", f"{self.base}/api/approval")
+        self.assertIsNone(empty["state"])
+        status, _ = _req("POST", f"{self.base}/api/approval",
+                         {"state": "approved", "note": "ship it"})
+        self.assertEqual(status, 200)
+        _, data = _req("GET", f"{self.base}/api/approval")
+        self.assertEqual(data["state"], "approved")
+
+    def test_version_changes_after_comment(self):
+        _, v1 = _req("GET", f"{self.base}/api/version")
+        self.assertIn("plan", v1)
+        self.assertIn("comments", v1)
+        _req("POST", f"{self.base}/api/comments", {"blockId": "a", "body": "hi"})
+        _, v2 = _req("GET", f"{self.base}/api/version")
+        self.assertNotEqual(v1["comments"], v2["comments"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

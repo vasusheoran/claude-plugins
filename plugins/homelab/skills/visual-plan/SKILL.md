@@ -65,7 +65,9 @@ Read `references/document-quality.md` before writing the document body and
    `<section class="block" data-block-id="..." data-block-label="...">`. Block ids
    must be **unique and stable** — never renumber them on edits, because comments
    anchor to them. Use the building blocks in `references/document-quality.md`
-   (callouts, diagrams, annotated code, file tree, wireframes, columns).
+   (callouts, diagrams, annotated code, file tree, wireframes, columns). Author
+   each genuinely-open decision as an **interactive question block** (see the
+   template and `references/document-quality.md`) so the user answers inline.
 3. **Surface it.** Start the server and give the user the URL:
    ```bash
    python3 plans/<slug>/serve.py --dir plans/<slug> --port 8000 --open
@@ -78,28 +80,41 @@ Read `references/document-quality.md` before writing the document body and
    steps, option-menus that should commit to one choice, and filler. Apply
    clear-cut fixes; route genuine judgment calls into the Open questions block.
 
-## The comment-and-improve loop
+## The review loop
 
-This is the local analog of agent-native's `get-plan-feedback`:
+The local analog of agent-native's `get-plan-feedback`. The reviewer interacts
+in the browser; the server persists everything to three JSON files next to the
+plan, which **you read** to revise:
 
-1. The user hovers any block and clicks 💬 (or selects text first to quote it),
-   types a comment, and saves. `comments.js` POSTs it to `serve.py`, which
-   appends it to **`plans/<slug>/comments.json`**.
-2. **Read `plans/<slug>/comments.json`** to ingest feedback. Each comment has
-   `blockId` (which section), `blockLabel`, optional `quote`, `body`, `status`,
-   and `target` (`agent` = act on it; `human` = context only).
-3. Apply changes by editing `plan.html` for the referenced blocks. Keep block
-   ids stable so existing comments stay anchored.
-4. **Mark addressed comments resolved** by setting their `status` to
-   `"resolved"` in `comments.json` (edit the file). The panel dims resolved
-   comments; leave human-targeted ones open.
-5. Tell the user to reload the page, and summarize what you changed and anything
-   you still need them to decide.
+- **`comments.json`** — review comments. Each has `blockId`, `blockLabel`, an
+  optional `quote` (text selection) or `anchor` (`{x,y}` % of a pinned point),
+  `parentId` (set on replies → threads), `body`, `status`, and `target` (`agent`
+  = act on it; `human` = context only). The reviewer adds them three ways: hover
+  a block and click 💬, select text to quote it, or **Alt-click** any point
+  (e.g. on a diagram/wireframe) to pin a comment there. They can reply, and
+  **resolve/reopen from the page** (you don't have to hand-edit status anymore,
+  though you still can).
+- **`answers.json`** — answers to the inline question blocks, one per
+  `questionId` (`value` is a string for `single`/`freeform`, an array for
+  `multi`). This is how open decisions get settled.
+- **`approval.json`** — the explicit gate: `state` is `null`, `"approved"`, or
+  `"changes-requested"`, with an optional `note`.
 
-Re-read `comments.json` before editing, after any pause, and before your final
-response. If the user opened the file as a bare `file://` (no server), comments
-live in their browser's localStorage instead; ask them to click **Copy feedback
-JSON** in the panel and paste it back, then apply it the same way.
+To iterate:
+
+1. **Read all three files** before editing, after any pause, and before your
+   final response. Treat `approval.json` as the gate — only start writing code
+   once `state` is `"approved"`.
+2. Apply changes by editing `plan.html` for the referenced blocks. Keep block
+   ids stable so existing comments/pins/quotes stay anchored. Optionally set
+   addressed agent-targeted comments to `"status":"resolved"` in `comments.json`.
+3. **No reload needed** — the page polls and auto-refreshes: editing `plan.html`
+   reloads it; new comments/answers/approval update live. Just summarize what you
+   changed and anything still needing a decision.
+
+If the user opened the file as a bare `file://` (no server), all state lives in
+their browser's localStorage instead; ask them to click **Copy feedback JSON** in
+the panel and paste it back, then apply it the same way.
 
 ## Notes
 
@@ -109,5 +124,9 @@ JSON** in the panel and paste it back, then apply it the same way.
 - **If a plan's look or structure is wrong, fix the shared assets** (`plan.css`,
   `comments.js`, `template.html`) and the reference docs — don't hand-patch one
   stored plan. Turn feedback into better guidance.
-- `tests/test_serve.py` covers the comment API; run `python3 tests/test_serve.py`
-  after changing `serve.py`.
+- **State files** (`comments.json`, `answers.json`, `approval.json`) are written
+  next to `plan.html`. If checking the plan into the repo, consider gitignoring
+  them — they're review state, not the plan itself.
+- `tests/test_serve.py` covers the review API (comments/threads/resolve-reopen,
+  answers, approval, version); run `python3 tests/test_serve.py` after changing
+  `serve.py`.

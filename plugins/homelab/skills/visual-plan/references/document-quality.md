@@ -63,13 +63,34 @@ Reserve `annotated` for code that needs margin notes; use bare `<pre>` for
 throwaway snippets. Use `diagram` for two-dimensional relationships, not a
 left-to-right chain unless the relationship is genuinely sequential.
 
-## Open questions
+## Open questions (interactive)
 
-- One block at the bottom only. For each genuinely open either/or, give a
-  **recommended default with rationale** so the user can approve by silence.
+Author each genuinely-open decision as an **interactive question block** so the
+user answers in the page; answers land in `answers.json` for you to read. Keep
+them together near the bottom — don't scatter questions through the document.
+
+```html
+<section class="block question" data-block-id="q-store"
+         data-block-label="Where should state live?"
+         data-question-id="store" data-question-mode="single">
+  <h3>Where should plan state live?</h3>
+  <div class="qopt" data-value="json">Flat JSON (recommended — simplest)</div>
+  <div class="qopt" data-value="sqlite">SQLite (only if we need queries)</div>
+</section>
+```
+
+- `data-question-mode`: `single` (radio), `multi` (checkbox), or `freeform`
+  (a textarea is rendered automatically — omit `.qopt` children).
+- `data-question-id` must be unique and stable — answers key off it.
+- Put a **recommended default in the option text** so the user can approve by
+  silence.
 - For complex plans, do a final pass: any undecided architecture, scope, UX,
   data shape, rollout, or ownership question must either be decided in the plan
-  (with rationale) or appear here with a recommended default.
+  (with rationale) or appear as a question block with a recommended default.
+
+The reviewer's **Approve / Request changes** decision (the approval gate) is a
+fixed bar injected automatically — you don't author it; you read its result from
+`approval.json`.
 
 ## Pre-handoff check
 

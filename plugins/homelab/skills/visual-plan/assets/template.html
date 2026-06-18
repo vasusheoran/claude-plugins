@@ -79,10 +79,25 @@
 
     <section class="block" data-block-id="open-questions" data-block-label="Open questions">
       <h2>Open questions</h2>
-      <ol>
-        <li><strong>Question?</strong> — recommended default + why. (Decide here or leave for review.)</li>
-      </ol>
+      <p>Each genuinely-open decision is an interactive question block — the user
+         answers inline and the agent reads it from <code>answers.json</code>.
+         Modes: <code>single</code> (radio), <code>multi</code> (checkbox),
+         <code>freeform</code> (textarea). Give a recommended default in the option text.</p>
     </section>
+
+    <section class="block question" data-block-id="q-datastore"
+             data-block-label="Where should state live?"
+             data-question-id="datastore" data-question-mode="single">
+      <h3>Where should plan state live?</h3>
+      <div class="qopt" data-value="json">Flat JSON files (recommended — simplest, matches serve.py)</div>
+      <div class="qopt" data-value="sqlite">SQLite (only if we need queries later)</div>
+    </section>
+
+    <p class="wf-muted" style="font-size:13px">
+      Tip: hover any section and click 💬 to comment, select text to quote it, or
+      <strong>Alt-click</strong> any point (e.g. on a diagram/wireframe) to pin a
+      comment there. Reviewers approve or request changes from the bottom bar.
+    </p>
 
   </main>
   <script src="comments.js"></script>
