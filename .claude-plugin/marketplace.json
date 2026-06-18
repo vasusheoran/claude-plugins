@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "homelab",
-      "description": "Homelab management plugin — Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, and statusline setup.",
+      "description": "Homelab management plugin — Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, statusline setup, and local visual planning.",
       "author": {
         "name": "Vasu Sheoran"
       },
@@ -19,7 +19,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/homelab",
         "ref": "main",
-        "sha": "8c04bd91d7f29f2a820e63168541b3636eac6639"
+        "sha": "d323d62f0ebbc36f224c02e7ea638aa6e382e3b0"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
     }
