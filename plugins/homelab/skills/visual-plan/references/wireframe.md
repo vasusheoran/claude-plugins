@@ -34,6 +34,11 @@ architecture, backend, data, or copy-only plans.
 - Helper classes: `.wf-frame` (`.browser` / `.app` adds a chrome strip),
   `.wf-chrome`, `.wf-body`, `.wf-card`, `.wf-pill`, `.wf-muted`, `.wf-spacer`,
   `.wf-cap` (caption under a frame).
+- Reviewers can comment on any control via the **mark** picker, but give the
+  controls you expect to be discussed a stable `data-cmt-id`
+  (+ optional `data-cmt-label`) so their comments survive your edits — see
+  `document-quality.md` › Component-level comments. Keep the id stable across
+  revisions.
 - No decorative drop shadows or fake depth — separate with spacing, borders, and
   labels.
 

@@ -84,6 +84,8 @@ class CommentStore(_JsonFile):
             "parentId": fields.get("parentId"),
             "blockId": fields.get("blockId", ""),
             "blockLabel": fields.get("blockLabel", ""),
+            "componentId": fields.get("componentId"),
+            "componentLabel": fields.get("componentLabel"),
             "quote": fields.get("quote"),
             "anchor": fields.get("anchor"),
             "body": fields.get("body", ""),
@@ -154,6 +156,26 @@ class ApprovalStore(_JsonFile):
         return data
 
 
+class AckStore(_JsonFile):
+    """The agent's acknowledgement of a submission. Durable so the reviewer's
+    confirmation reflects that the agent actually saw it — not a UI flash. Keyed
+    by the submission's decidedAt so a fresh submit shows 'awaiting' until acked."""
+
+    def __init__(self, path):
+        super().__init__(path, {"decidedAt": None, "by": None,
+                                "message": "", "ackedAt": None})
+
+    def get(self):
+        return self.read()
+
+    def set(self, decided_at, by="Claude", message=""):
+        data = {"decidedAt": decided_at, "by": by, "message": message,
+                "ackedAt": _now()}
+        with self._lock:
+            self.write(data)
+        return data
+
+
 def safe_path(root, url_path):
     """Resolve url_path to a file inside root, or None if it escapes."""
     root = Path(root).resolve()
@@ -189,6 +211,7 @@ def make_handler(plan_dir):
     comments = CommentStore(plan_dir / "comments.json")
     answers = AnswerStore(plan_dir / "answers.json")
     approval = ApprovalStore(plan_dir / "approval.json")
+    ack = AckStore(plan_dir / "ack.json")
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -219,12 +242,15 @@ def make_handler(plan_dir):
                 return self._json(200, {"answers": answers.list()})
             if path == "/api/approval":
                 return self._json(200, approval.get())
+            if path == "/api/ack":
+                return self._json(200, ack.get())
             if path == "/api/version":
                 return self._json(200, {
                     "plan": _digest(plan_dir / "plan.html"),
                     "comments": _digest(plan_dir / "comments.json"),
                     "answers": _digest(plan_dir / "answers.json"),
                     "approval": _digest(plan_dir / "approval.json"),
+                    "ack": _digest(plan_dir / "ack.json"),
                 })
             target = safe_path(plan_dir, self.path)
             if target is None:
@@ -259,6 +285,10 @@ def make_handler(plan_dir):
             if path == "/api/approval":
                 return self._json(200, approval.set(
                     payload.get("state"), payload.get("note", "")))
+            if path == "/api/ack":
+                return self._json(200, ack.set(
+                    payload.get("decidedAt"), payload.get("by", "Claude"),
+                    payload.get("message", "")))
             return self.send_error(404, "Not found")
 
     return Handler

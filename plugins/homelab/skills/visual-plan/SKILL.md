@@ -98,19 +98,31 @@ plan, which **you read** to revise:
   `questionId` (`value` is a string for `single`/`freeform`, an array for
   `multi`). This is how open decisions get settled.
 - **`approval.json`** — the explicit gate: `state` is `null`, `"approved"`, or
-  `"changes-requested"`, with an optional `note`.
+  `"changes-requested"`, with an optional `note`. The reviewer sets it with a
+  single **Submit review**; state is derived from intent (`approved` when no open
+  *Submit*-to-Claude comments remain, else `changes-requested`).
+- **`ack.json`** — your acknowledgement of a submission, keyed to its
+  `decidedAt`, so the reviewer's "acknowledged by Claude" confirmation reflects
+  that you actually saw it, not a UI flash. POST `/api/ack`
+  (`{decidedAt, by, message}`) the moment you pick up a submission.
 
 To iterate:
 
-1. **Read all three files** before editing, after any pause, and before your
+1. **Read all four files** before editing, after any pause, and before your
    final response. Treat `approval.json` as the gate — only start writing code
-   once `state` is `"approved"`.
+   once `state` is `"approved"`. A **clean approval / LGTM with no open
+   *Submit*-to-Claude comments is the cue to stop planning and implement**; only
+   open agent-targeted comments keep you in the review loop.
 2. Apply changes by editing `plan.html` for the referenced blocks. Keep block
    ids stable so existing comments/pins/quotes stay anchored. Optionally set
    addressed agent-targeted comments to `"status":"resolved"` in `comments.json`.
 3. **No reload needed** — the page polls and auto-refreshes: editing `plan.html`
-   reloads it; new comments/answers/approval update live. Just summarize what you
-   changed and anything still needing a decision.
+   reloads it; new comments/answers/approval/ack update live. Just summarize what
+   you changed and anything still needing a decision.
+
+To react without being pinged, you can run a tiny background poller over
+`/api/version` (the digests for `comments`/`answers`/`approval`) that wakes you on
+change; have it POST the ack on trigger so the confirmation lands within a poll.
 
 If the user opened the file as a bare `file://` (no server), all state lives in
 their browser's localStorage instead; ask them to click **Copy feedback JSON** in
@@ -124,9 +136,9 @@ the panel and paste it back, then apply it the same way.
 - **If a plan's look or structure is wrong, fix the shared assets** (`plan.css`,
   `comments.js`, `template.html`) and the reference docs — don't hand-patch one
   stored plan. Turn feedback into better guidance.
-- **State files** (`comments.json`, `answers.json`, `approval.json`) are written
-  next to `plan.html`. If checking the plan into the repo, consider gitignoring
-  them — they're review state, not the plan itself.
+- **State files** (`comments.json`, `answers.json`, `approval.json`, `ack.json`)
+  are written next to `plan.html`. If checking the plan into the repo, consider
+  gitignoring them — they're review state, not the plan itself.
 - `tests/test_serve.py` covers the review API (comments/threads/resolve-reopen,
-  answers, approval, version); run `python3 tests/test_serve.py` after changing
-  `serve.py`.
+  answers, approval, ack, version); run `python3 tests/test_serve.py` after
+  changing `serve.py`.
