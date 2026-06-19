@@ -19,7 +19,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/homelab",
         "ref": "main",
-        "sha": "5a8dcff44ee63b5216a25a82d32a1db69d56eb7d"
+        "sha": "77660518a110431aa2111aabe57e1e639c9d1d2b"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
     }
