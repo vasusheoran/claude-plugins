@@ -44,23 +44,27 @@
 
   /*
    * Layout constants (sequence):
-   *   PARTICIPANT_W = 100, PARTICIPANT_H = 34, rx = 7
-   *   PITCH = 120 (center-to-center spacing)
-   *   MARGIN_X = 20 (left offset to first center)
-   *   HEADER_Y = 20 (top of participant box)
-   *   FIRST_MSG_Y = 80 (y of first message line, below box bottom at 54)
+   *   PW/PH = minimum participant box 100x34, rx = 7
+   *   HEADER_Y = 20 (top of participant box; doubles as the top margin)
    *   MSG_PITCH = 36 (vertical spacing between messages)
-   *   DIAGRAM_BOTTOM_MARGIN = 20 (extra below last message)
+   * Horizontal sizing is content-aware: box width grows to fit the widest
+   * participant label, and the center-to-center pitch grows to fit the widest
+   * message label across its span — labels never overlap lifelines and the
+   * first box never leaves the viewBox.
    */
   var SEQ = {
     PW: 100, PH: 34, RX: 7,
-    PITCH: 120,
     MARGIN_X: 20,
     HEADER_Y: 20,
-    FIRST_MSG_Y: 80,
+    MSG_GAP_TOP: 26,
     MSG_PITCH: 36,
     BOTTOM_MARGIN: 20
   };
+
+  // Deterministic width estimate for a 13px sans label (avg glyph ~7.5px).
+  function labelW(s) {
+    return String(s == null ? "" : s).length * 7.5;
+  }
 
   function renderSequence(spec, uid) {
     var participants = spec.participants || [];
@@ -75,31 +79,44 @@
       idSet[p.id] = true;
     }
 
-    // Build index: id -> center x
-    var cx = Object.create(null);
-    for (var i = 0; i < participants.length; i++) {
-      cx[participants[i].id] = SEQ.MARGIN_X + i * SEQ.PITCH;
-    }
-
-    // Validate messages
+    // Index of each participant (for message spans) + validation
+    var idx = Object.create(null);
+    for (var ii = 0; ii < participants.length; ii++) idx[participants[ii].id] = ii;
     for (var mi = 0; mi < messages.length; mi++) {
       var msg = messages[mi];
       if (msg.from === msg.to) {
         throw new Error("self-messages are not supported (participant: " + msg.from + ")");
       }
-      if (!(msg.from in cx)) throw new Error("unknown participant ref: " + msg.from);
-      if (!(msg.to in cx)) throw new Error("unknown participant ref: " + msg.to);
+      if (!(msg.from in idx)) throw new Error("unknown participant ref: " + msg.from);
+      if (!(msg.to in idx)) throw new Error("unknown participant ref: " + msg.to);
     }
 
-    // Compute diagram dimensions
-    var totalWidth = SEQ.MARGIN_X * 2 + (participants.length - 1) * SEQ.PITCH + SEQ.PW;
-    var lastMsgY = SEQ.FIRST_MSG_Y + (messages.length - 1) * SEQ.MSG_PITCH;
-    var diagramBottom = lastMsgY + SEQ.MSG_PITCH + SEQ.BOTTOM_MARGIN;
-    var totalHeight = diagramBottom + SEQ.BOTTOM_MARGIN;
+    // Content-aware horizontal layout: uniform box width fits the widest
+    // participant label; uniform pitch fits the widest message label over the
+    // columns it spans, and always clears the boxes themselves.
+    var boxW = SEQ.PW;
+    for (var bi = 0; bi < participants.length; bi++) {
+      boxW = Math.max(boxW, labelW(participants[bi].label) + 28);
+    }
+    var pitch = boxW + 30;
+    for (var pi3 = 0; pi3 < messages.length; pi3++) {
+      var m3 = messages[pi3];
+      var span = Math.max(1, Math.abs(idx[m3.to] - idx[m3.from]));
+      pitch = Math.max(pitch, (labelW(m3.label) + 24) / span);
+    }
 
-    // Add 20px margin on all sides for viewBox
-    var vbW = totalWidth + 40;
-    var vbH = totalHeight + 20;
+    // id -> center x, first box flush with the left margin
+    var cx = Object.create(null);
+    for (var i = 0; i < participants.length; i++) {
+      cx[participants[i].id] = SEQ.MARGIN_X + boxW / 2 + i * pitch;
+    }
+
+    // Dimensions (HEADER_Y is the top margin; MARGIN_X each side)
+    var firstMsgY = SEQ.HEADER_Y + SEQ.PH + SEQ.MSG_GAP_TOP;
+    var lastMsgY = firstMsgY + Math.max(0, messages.length - 1) * SEQ.MSG_PITCH;
+    var diagramBottom = lastMsgY + 28;
+    var vbW = SEQ.MARGIN_X * 2 + boxW + Math.max(0, participants.length - 1) * pitch;
+    var vbH = diagramBottom + SEQ.BOTTOM_MARGIN;
 
     var arwRef = "url(#arw-" + uid + ")";
     var parts = [];
@@ -111,15 +128,12 @@
     );
     parts.push(markerDef(uid));
 
-    // Participant boxes + lifelines (with offset for 20px left margin in viewBox)
-    var offsetX = 20;
-    var offsetY = 20;
-
+    // Participant boxes + lifelines
     for (var pi2 = 0; pi2 < participants.length; pi2++) {
       var pt = participants[pi2];
-      var centerX = cx[pt.id] + offsetX;
-      var boxX = centerX - SEQ.PW / 2;
-      var boxY = SEQ.HEADER_Y + offsetY;
+      var centerX = cx[pt.id];
+      var boxX = centerX - boxW / 2;
+      var boxY = SEQ.HEADER_Y;
       var boxBottom = boxY + SEQ.PH;
 
       parts.push(
@@ -127,7 +141,7 @@
       );
       // Header box
       parts.push(
-        '<rect x="' + boxX + '" y="' + boxY + '" width="' + SEQ.PW + '" height="' + SEQ.PH + '"' +
+        '<rect x="' + boxX + '" y="' + boxY + '" width="' + boxW + '" height="' + SEQ.PH + '"' +
         ' rx="' + SEQ.RX + '" fill="var(--bg-soft)" stroke="var(--line)"/>'
       );
       parts.push(
@@ -137,7 +151,7 @@
       // Dashed lifeline from box bottom to diagram bottom
       parts.push(
         '<line x1="' + centerX + '" y1="' + boxBottom + '"' +
-        ' x2="' + centerX + '" y2="' + (diagramBottom + offsetY) + '"' +
+        ' x2="' + centerX + '" y2="' + diagramBottom + '"' +
         ' stroke="var(--line)" stroke-dasharray="4 4"/>'
       );
       parts.push('</g>');
@@ -146,9 +160,9 @@
     // Messages
     for (var mi2 = 0; mi2 < messages.length; mi2++) {
       var msg2 = messages[mi2];
-      var msgY = SEQ.FIRST_MSG_Y + mi2 * SEQ.MSG_PITCH + offsetY;
-      var fromX = cx[msg2.from] + offsetX;
-      var toX = cx[msg2.to] + offsetX;
+      var msgY = firstMsgY + mi2 * SEQ.MSG_PITCH;
+      var fromX = cx[msg2.from];
+      var toX = cx[msg2.to];
       var isReturn = msg2.style === "return";
 
       // Direction: stop ~2px short of target lifeline
@@ -179,7 +193,7 @@
       var labelX = (fromX + toX) / 2;
       if (msg2.label) {
         parts.push(
-          '<text x="' + labelX + '" y="' + (msgY - 4) + '"' +
+          '<text x="' + labelX + '" y="' + (msgY - 8) + '"' +
           ' text-anchor="middle" fill="var(--ink)">' + esc(msg2.label) + '</text>'
         );
       }

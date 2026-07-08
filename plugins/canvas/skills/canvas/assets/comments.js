@@ -319,6 +319,20 @@
 
   /* ------------------------ blocks, pins, quotes --------------------- */
 
+  // Give annotated-code panes line numbers so margin notes ("L3 …") have
+  // something to point at. Display-only, runs once per pre; numbers are
+  // unselectable so copied code stays clean.
+  function numberAnnotated() {
+    document.querySelectorAll(".annotated pre:not(.numbered)").forEach(function (pre) {
+      var lines = pre.textContent.replace(/\n$/, "").split("\n");
+      pre.innerHTML = lines.map(function (line, i) {
+        return '<span class="ln-row"><span class="num">' + (i + 1) + "</span>" +
+          "<span>" + escapeHtml(line) + "</span></span>";
+      }).join("\n");
+      pre.classList.add("numbered");
+    });
+  }
+
   function decorateBlocks() {
     document.querySelectorAll("[data-block-id]").forEach(function (el) {
       el.classList.add("block");
@@ -762,6 +776,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    numberAnnotated();
     loadAll().then(function () {
       renderAll();
       if (hasServer) setInterval(poll, 2500);

@@ -275,6 +275,14 @@ td code { font-size: 12.5px; }
   background: var(--code-bg); color: var(--code-ink);
   font-family: var(--mono); font-size: 13px; line-height: 1.7; overflow-x: auto;
 }
+/* line numbers injected by comments.js (design .code .ln/.num) — the margin
+   notes' "L3" keys point at these */
+.annotated pre.numbered { padding-left: 0; }
+.annotated pre.numbered .ln-row { display: grid; grid-template-columns: 40px 1fr; }
+.annotated pre.numbered .num {
+  text-align: right; padding-right: 14px; user-select: none;
+  color: color-mix(in oklab, var(--code-ink) 40%, transparent);
+}
 .annotated .notes {
   background: var(--bg-soft); border-left: 1px solid var(--line-strong);
   padding: 0; font-size: 12.5px;
