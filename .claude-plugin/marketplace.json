@@ -19,7 +19,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/homelab",
         "ref": "main",
-        "sha": "e3ffdf28fa0f94fb598af9e9c7c16b79937c2b7d"
+        "sha": "41711fa8d1182cbb75600b0f248fc3bbe78588b4"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
     },
@@ -35,7 +35,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/canvas",
         "ref": "main",
-        "sha": "e3ffdf28fa0f94fb598af9e9c7c16b79937c2b7d"
+        "sha": "41711fa8d1182cbb75600b0f248fc3bbe78588b4"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
     }
