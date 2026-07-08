@@ -15,7 +15,9 @@ Usage:
     python3 serve.py [--dir .] [--port 8000] [--open]
 
 Persisted files (next to plan.html):
-    comments.json   review comments (threaded via parentId; pin/quote anchors)
+    comments.json   review comments (threaded via parentId; pin/quote anchors;
+                    page field anchors comment to a specific HTML artifact,
+                    defaulting to "plan.html")
     answers.json    answers to inline question blocks
     approval.json   approve / request-changes decision
 
@@ -23,7 +25,8 @@ Endpoints:
     GET  /                              -> plan.html
     GET  /<file>                        -> static file inside --dir (no traversal)
     GET  /api/comments                  -> {"comments": [...]}
-    POST /api/comments                  -> create a comment/reply (201)
+    POST /api/comments                  -> create a comment/reply (201); page field
+                                           defaults to "plan.html"
     POST /api/comments/<id>/resolve     -> mark resolved
     POST /api/comments/<id>/reopen      -> mark open
     GET  /api/answers                   -> {"answers": [...]}
@@ -31,13 +34,22 @@ Endpoints:
     GET  /api/approval                  -> {"state": ..., "note": ..., ...}
     POST /api/approval                  -> set approval decision
     GET  /api/version                   -> content digests for live refresh
+    GET  /api/pages                     -> {"pages": [{"file": ..., "title": ...}]}
+    GET  /api/wait?since=N&timeout=S&events=agent|any
+                                        -> long-poll; blocks until a qualifying
+                                           event (comment to agent, approval, or
+                                           any event when events=any) or timeout;
+                                           returns {"cursor": int, "event": str|None}
 """
 
 import argparse
 import hashlib
 import json
+import re
 import secrets
 import threading
+import time
+import urllib.parse
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -91,6 +103,7 @@ class CommentStore(_JsonFile):
             "body": fields.get("body", ""),
             "author": fields.get("author", "human"),
             "target": fields.get("target", "agent"),
+            "page": fields.get("page", "plan.html"),
             "status": "open",
             "createdAt": _now(),
         }
@@ -176,6 +189,57 @@ class AckStore(_JsonFile):
         return data
 
 
+class EventBus:
+    """In-memory event bus for server-push notifications (long-poll via /api/wait).
+
+    notify(kind) -> seq: append an event, return its monotonically increasing
+        integer sequence number (starting at 1). Keeps at most 200 events.
+    wait(since, kinds=None, timeout=540) -> {"cursor": int, "event": str|None}:
+        block until an event exists with seq > since and kind in kinds (None
+        means any kind), or until timeout. Returns immediately if a qualifying
+        event already exists. cursor is always the latest seq at return time.
+    """
+
+    _MAX_EVENTS = 200
+
+    def __init__(self):
+        self._lock = threading.Condition(threading.Lock())
+        self._events = []  # list of (seq, kind)
+        self._seq = 0
+
+    def notify(self, kind):
+        """Append an event of the given kind; return its seq."""
+        with self._lock:
+            self._seq += 1
+            self._events.append((self._seq, kind))
+            if len(self._events) > self._MAX_EVENTS:
+                self._events = self._events[-self._MAX_EVENTS:]
+            self._lock.notify_all()
+            return self._seq
+
+    def wait(self, since, kinds=None, timeout=540):
+        """Block until a qualifying event or timeout.
+
+        Returns {"cursor": latest_seq, "event": kind_or_None}.
+        kinds=None means accept any kind.
+        """
+        with self._lock:
+            deadline = time.monotonic() + timeout
+
+            while True:
+                # Check for a qualifying event already in the buffer.
+                for seq, kind in self._events:
+                    if seq > since and (kinds is None or kind in kinds):
+                        return {"cursor": self._seq, "event": kind}
+
+                # How long until timeout?
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return {"cursor": self._seq, "event": None}
+
+                self._lock.wait(timeout=remaining)
+
+
 def safe_path(root, url_path):
     """Resolve url_path to a file inside root, or None if it escapes."""
     root = Path(root).resolve()
@@ -206,12 +270,42 @@ CONTENT_TYPES = {
 }
 
 
+def _list_pages(plan_dir):
+    """List *.html files directly in plan_dir, plan.html first then alphabetical.
+
+    Returns a list of {"file": name, "title": title_or_filename} dicts.
+    Title is extracted from the first <title>…</title> tag in the file (case-
+    insensitive, whitespace-trimmed); falls back to the filename if absent.
+    """
+    html_files = sorted(
+        p.name for p in plan_dir.iterdir()
+        if p.is_file() and p.suffix.lower() == ".html"
+    )
+    # plan.html sorts first
+    if "plan.html" in html_files:
+        html_files.remove("plan.html")
+        html_files = ["plan.html"] + html_files
+
+    pages = []
+    _title_re = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+    for name in html_files:
+        try:
+            snippet = (plan_dir / name).read_text(errors="replace")[:4096]
+        except OSError:
+            snippet = ""
+        m = _title_re.search(snippet)
+        title = m.group(1).strip() if m else ""
+        pages.append({"file": name, "title": title or name})
+    return pages
+
+
 def make_handler(plan_dir):
     plan_dir = Path(plan_dir).resolve()
     comments = CommentStore(plan_dir / "comments.json")
     answers = AnswerStore(plan_dir / "answers.json")
     approval = ApprovalStore(plan_dir / "approval.json")
     ack = AckStore(plan_dir / "ack.json")
+    bus = EventBus()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -252,6 +346,22 @@ def make_handler(plan_dir):
                     "approval": _digest(plan_dir / "approval.json"),
                     "ack": _digest(plan_dir / "ack.json"),
                 })
+            if path == "/api/pages":
+                return self._json(200, {"pages": _list_pages(plan_dir)})
+            if path == "/api/wait":
+                qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+                params = urllib.parse.parse_qs(qs)
+                since = int(params.get("since", ["0"])[0])
+                raw_timeout = float(params.get("timeout", ["540"])[0])
+                timeout = max(0.0, min(600.0, raw_timeout))
+                events_param = params.get("events", ["agent"])[0]
+                if events_param == "any":
+                    kinds = None
+                else:
+                    # "agent" default: comment and approval
+                    kinds = {"comment", "approval"}
+                result = bus.wait(since=since, kinds=kinds, timeout=timeout)
+                return self._json(200, result)
             target = safe_path(plan_dir, self.path)
             if target is None:
                 return self.send_error(403, "Forbidden")
@@ -273,7 +383,10 @@ def make_handler(plan_dir):
                 return self._json(400, {"error": "invalid json"})
 
             if path == "/api/comments":
-                return self._json(201, comments.add(payload))
+                comment = comments.add(payload)
+                if comment.get("target") == "agent":
+                    bus.notify("comment")
+                return self._json(201, comment)
             if path.startswith("/api/comments/") and path.endswith("/resolve"):
                 cid = path[len("/api/comments/"):-len("/resolve")]
                 return self._json(200, {"ok": comments.resolve(cid)})
@@ -281,10 +394,14 @@ def make_handler(plan_dir):
                 cid = path[len("/api/comments/"):-len("/reopen")]
                 return self._json(200, {"ok": comments.reopen(cid)})
             if path == "/api/answers":
-                return self._json(201, answers.upsert(payload))
+                answer = answers.upsert(payload)
+                bus.notify("answer")
+                return self._json(201, answer)
             if path == "/api/approval":
-                return self._json(200, approval.set(
-                    payload.get("state"), payload.get("note", "")))
+                result = approval.set(
+                    payload.get("state"), payload.get("note", ""))
+                bus.notify("approval")
+                return self._json(200, result)
             if path == "/api/ack":
                 return self._json(200, ack.set(
                     payload.get("decidedAt"), payload.get("by", "Claude"),
