@@ -1,0 +1,8 @@
+{
+  "name": "canvas",
+  "description": "Local canvas for Claude Code — plans, UI mockups, decision docs, and diagrams as reviewable HTML workspaces with inline comments and a live wake loop. Stdlib-only, localhost-only.",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}
