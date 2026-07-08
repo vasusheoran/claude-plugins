@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comment UX + diagrams — Canvas</title>
+  <link rel="stylesheet" href="plan.css" />
+</head>
+<body>
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status approved">APPROVED — shipped 2026-07-08 (commit e3ffdf2)</span>
+      <span>Created 2026-07-08</span>
+      <span>Author: Claude</span>
+      <span>Touches: plugins/canvas/skills/canvas/{assets,references,tests}</span>
+    </div>
+
+    <h1>One comment entry point + first-class diagrams</h1>
+
+    <section class="block" data-block-id="outcome" data-block-label="Outcome &amp; scope">
+      <h2>Outcome</h2>
+      <p>Two changes to the canvas skill. <strong>(1) Comment creation collapses to a
+         single entry point</strong> — a Comment mode toggled from the top nav — and every
+         injected per-artifact affordance disappears, so artifacts (especially interactive
+         mockups) render exactly as authored. <strong>(2) Diagrams become first-class</strong>:
+         a small <code>diagram.js</code> asset renders <em>sequence diagrams</em> and
+         <em>flowcharts</em> from declarative JSON specs, with stable comment anchors on
+         every node and message, chosen per task alongside the existing hand-SVG and div-kit
+         options.</p>
+      <p><strong>In scope:</strong> <code>comments.js</code>/<code>plan.css</code> interaction
+         rework; new <code>assets/diagram.js</code> + node-run tests; reference and template
+         updates. <strong>Non-goals:</strong> no server changes (<code>serve.py</code> and the
+         comment JSON schema stay byte-compatible); no reviewer-side drawing or diagram
+         editing; no auto-layout engine; no external libraries. See the two other tabs:
+         <strong>ux-mockup</strong> is a working demo of the proposed mode,
+         <strong>diagram-samples</strong> shows the exact rendering style with its specs.</p>
+    </section>
+
+    <section class="block" data-block-id="ux-model" data-block-label="Comment UX model">
+      <h2>The comment UX model</h2>
+      <p>Today there are three ways to start a comment, two of them always armed: a hover
+         💬 injected into every block (<code>comment-affordance</code>, comments.js:245),
+         a <em>global</em> Alt-click listener (comments.js:264), and the nav's
+         <code>mark</code> picker. The injected button overlaps artifact content, and the
+         global Alt-click steals events from interactive mockups. All three collapse into
+         one:</p>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Comment mode is the only entry point.</strong> The nav's <code>mark</code>
+        button becomes <strong>Comment</strong> (same slot, <code>cmt-nav-btn</code>).
+        Toggled by click or the <kbd>C</kbd> key (ignored while typing in inputs).
+        In mode: hover highlights the target (snapping to the nearest
+        <code>data-cmt-id</code>, as the picker does today) — <em>click</em> anchors to the
+        element · <em>Alt-click</em> drops a point pin · <em>selecting text</em> quotes it.
+        <kbd>Esc</kbd> or re-click exits.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Mode is sticky.</strong> After posting a comment you stay in Comment mode
+        (Figma-style) until <kbd>Esc</kbd> — reviews are bursts, and re-arming per comment
+        is the annoying path.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Outside the mode, zero listeners touch the artifact.</strong> The
+        mousemove/click/mouseup handlers are no-ops unless the mode is on. Prototype JS in
+        mockup artifacts gets every event; nothing is injected into blocks. Existing
+        <em>display</em> of comments (pins, quote highlights, outlines on commented
+        elements) stays — it's feedback, not an entry point.
+      </div>
+      <p>What is deleted outright: the injected 💬 button and its CSS
+         (<code>plan.css:170–177</code>, the <code>:hover</code> rule at 71), the global
+         Alt-click listener, and the passive selection capture in
+         <code>openComposer</code> (quotes are captured by the in-mode mouseup instead).
+         The wire format doesn't move: the mode still produces the same
+         <code>componentId</code> / <code>anchor</code> / <code>quote</code> /
+         <code>blockId</code> fields, so old workspaces and old comments replay
+         unchanged.</p>
+      <p>Try it on the <strong>ux-mockup</strong> tab — the demo implements exactly this
+         state machine.</p>
+    </section>
+
+    <section class="block" data-block-id="diagram-model" data-block-label="Diagram model">
+      <h2>Diagrams: declarative specs, deterministic rendering</h2>
+      <p>Hand-authored SVG (shipped in <code>svg-diagrams.md</code>) is right for freeform
+         architecture, but sequence diagrams and flowcharts are geometry-heavy and
+         repetitive — exactly what a tiny renderer should do. A new
+         <code>assets/diagram.js</code> (vanilla, no deps, copied per workspace like the
+         other assets) renders two types from a JSON spec placed in the artifact:</p>
+      <div class="annotated">
+        <pre>&lt;script type="application/json" data-diagram&gt;
+{ "type": "sequence",
+  "participants": [
+    {"id": "reviewer", "label": "Reviewer"},
+    {"id": "server",   "label": "serve.py"} ],
+  "messages": [
+    {"id": "m-submit", "from": "reviewer", "to": "server",
+     "label": "POST /api/approval"},
+    {"from": "server", "to": "reviewer",
+     "label": "ack digest", "style": "return"} ] }
+&lt;/script&gt;</pre>
+        <div class="notes">
+          <div class="note-item"><span class="ln">L1</span> auto-mounted: diagram.js replaces the script tag with the rendered SVG at load</div>
+          <div class="note-item"><span class="ln">L4</span> participant/node ids are required and become <code>data-cmt-id</code> — reviewers pin comments to lifelines and boxes, and anchors survive edits</div>
+          <div class="note-item"><span class="ln">L7</span> a message with an explicit <code>id</code> is also pinnable; omit it and the message renders without an anchor (positional ids would drift on reorder — deliberately not generated)</div>
+          <div class="note-item"><span class="ln">L10</span> <code>style: "return"</code> renders dashed — replies/acks read differently from calls</div>
+        </div>
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>No auto-layout.</strong> Sequence order is the y-axis (renderer spaces
+        messages evenly); flowchart nodes declare <code>col</code>/<code>row</code> on a
+        grid and the renderer does boxes, diamonds, orthogonal edges, arrowheads, and
+        labels. Deterministic beats clever — same spec, same pixels, no layout jitter on
+        edit.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Pure-function core.</strong> <code>renderDiagram(spec) → SVG string</code>,
+        DOM-free, so it's testable with plain <code>node tests/test_diagram.js</code>
+        (dev-only; runtime still needs nothing but a browser). Styling via the
+        <code>plan.css</code> tokens only.
+      </div>
+      <p>Which diagram when (this table lands in the reference doc): <em>sequence</em> —
+         actors/services interacting over time (protocols, review loops, auth flows);
+         <em>flowchart</em> — branching logic and processes (algorithms, decision trees,
+         retry policies); <em>hand SVG</em> — freeform architecture and topology;
+         <em>div kit</em> — a quick linear chain. See the <strong>diagram-samples</strong>
+         tab for both types rendered in the target style, next to their specs.</p>
+    </section>
+
+    <section class="block" data-block-id="scope-fence" data-block-label="Scope fence">
+      <h2>Scope fence — include / exclude</h2>
+      <div class="columns">
+        <div>
+          <div class="col-title">Must / will</div>
+          <ul>
+            <li>Single nav entry point; delete 💬 affordance, global Alt-click, passive selection capture</li>
+            <li><kbd>C</kbd>/<kbd>Esc</kbd> keyboard; visible mode state (nav active + crosshair + highlight)</li>
+            <li>Comment JSON schema unchanged; zero <code>serve.py</code> changes</li>
+            <li><code>diagram.js</code>: sequence + flowchart, token-styled, stable <code>data-cmt-id</code> anchors</li>
+            <li>TDD: <code>tests/test_diagram.js</code> red before implementation</li>
+            <li>Docs/templates updated (tip text, <code>document-quality.md</code>, <code>svg-diagrams.md</code> chooser, SKILL.md review-loop text)</li>
+          </ul>
+        </div>
+        <div>
+          <div class="col-title">Won't / can't</div>
+          <ul>
+            <li>No mermaid / CDN / npm — offline and no-deps are load-bearing</li>
+            <li>No auto-layout graph engine; authors place nodes on a grid</li>
+            <li>No reviewer drawing/editing; review stays comments + answers + approval</li>
+            <li>No animations or decorative styling in diagrams</li>
+            <li>No generated positional anchors (they'd detach on edit — worse than none)</li>
+            <li>Old workspaces keep their copied assets — no migration, by design</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="changes" data-block-label="Key changes">
+      <h2>Key changes</h2>
+      <div class="file-tree">
+        <div><span class="mod">~ assets/comments.js</span> — mark → Comment mode; fold pin/quote into mode; delete <code>decorateBlocks</code>'s button injection + global Alt-click; add <kbd>C</kbd> handler; open-comment indicator per q-indicator below</div>
+        <div><span class="mod">~ assets/plan.css</span> — remove <code>.comment-affordance</code> rules; mode cursor/highlight polish; indicator styles</div>
+        <div><span class="add">+ assets/diagram.js</span> — <code>renderDiagram()</code> core + auto-mount; ~300 lines vanilla</div>
+        <div><span class="add">+ tests/test_diagram.js</span> — node-run, written first: anchors present, message order = y order, decision renders as diamond, return style dashed, HTML-escaping, unknown type throws</div>
+        <div><span class="mod">~ assets/template.html, assets/canvas.html</span> — tip text: "click <strong>Comment</strong> (or press C)…"; canvas.html gains a commented-out diagram spec example</div>
+        <div><span class="mod">~ references/svg-diagrams.md</span> — becomes the diagram chooser: task → type table, diagram.js spec reference, hand-SVG guidance kept</div>
+        <div><span class="mod">~ references/document-quality.md, SKILL.md, modes.md</span> — comment-affordance wording + diagram pointers</div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="risks" data-block-label="Risks &amp; verification">
+      <h2>Risks &amp; verification</h2>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong>Discoverability regresses.</strong> Hover 💬 advertised itself; a nav
+        button doesn't. Mitigations: the panel's empty state and the template tip both
+        say "press C"; plus a one-time subtle pulse on the Comment button until first
+        use (CSS + localStorage flag).</div>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong>Mode listeners vs prototype JS.</strong> In-mode capture handlers
+        <code>preventDefault</code> on artifact clicks — that's the point (comment the
+        button, don't trigger it) — but they must ignore the review UI itself
+        (<code>isOwnUi</code>, already exists) and never leak when mode is off.
+        Verified by the mockup demo + a manual pass.</div>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong><kbd>C</kbd> collides with an artifact's own key handling.</strong> Guard:
+        only bare <kbd>C</kbd> (no modifiers), only when the target isn't an
+        input/textarea/contenteditable, and artifacts can opt out with
+        <code>&lt;body data-comment-key="off"&gt;</code>.</div>
+      <p><strong>Verification:</strong> node tests red → green for diagram.js; the full
+         Python suite stays green (no server changes); an end-to-end pass on a demo
+         workspace — enter mode, element/pin/quote comment each land with correct fields;
+         mode off → a clickable prototype receives its own events; both sample diagrams
+         render pixel-stable and their nodes take pinned comments.</p>
+    </section>
+
+    <section class="block" data-block-id="open-questions" data-block-label="Open questions">
+      <h2>Open questions</h2>
+      <p>Three genuinely open calls — answer inline; each has a recommended default.</p>
+    </section>
+
+    <section class="block question" data-block-id="q-pins"
+             data-block-label="Keep point pins?"
+             data-question-id="pins" data-question-mode="single">
+      <h3>Inside Comment mode, keep Alt-click point pins?</h3>
+      <div class="qopt" data-value="keep">Keep (recommended — pinning an exact spot on a diagram/wireframe is the one thing element anchors can't do; it's now safely gated behind the mode)</div>
+      <div class="qopt" data-value="drop">Drop — element + quote anchors only; simplest possible model, {x,y} pins die</div>
+    </section>
+
+    <section class="block question" data-block-id="q-indicator"
+             data-block-label="Open-comment indicator"
+             data-question-id="indicator" data-question-mode="single">
+      <h3>With the 💬 gone, how should a block show it has open comments?</h3>
+      <div class="qopt" data-value="chip">Small count chip at the block's top-right; clicking it opens the panel at that thread (recommended — it displays existing comments rather than creating new ones, so it doesn't violate the single-entry rule, and jump-to-thread is genuinely useful)</div>
+      <div class="qopt" data-value="tick">Passive left-edge accent tick only — visible but not clickable; the panel is the only navigation</div>
+      <div class="qopt" data-value="none">Nothing on the artifact — the panel and pins/quote-marks are the only signals</div>
+    </section>
+
+    <section class="block question" data-block-id="q-diagram-scope"
+             data-block-label="diagram.js scope"
+             data-question-id="diagram-scope" data-question-mode="single">
+      <h3>Which diagram types should diagram.js ship with?</h3>
+      <div class="qopt" data-value="seq-flow">Sequence + flowchart (recommended — covers interactions-over-time and branching logic, the two geometry-heavy cases; a state-machine type can come later if we feel the need)</div>
+      <div class="qopt" data-value="plus-state">Also a state-machine type now (nodes + labelled transitions; flowchart's grid covers most of it, so this may be redundant)</div>
+      <div class="qopt" data-value="none">No diagram.js — extend hand-SVG guidance with sequence/flowchart patterns instead (zero new code to maintain, but every sequence diagram is hand-placed geometry)</div>
+    </section>
+
+    <p class="wf-muted" style="font-size:13px">
+      Review: <strong>mark</strong> in the nav to pick any element, select text to quote,
+      Alt-click to pin. Check the <strong>ux-mockup</strong> and
+      <strong>diagram-samples</strong> tabs before deciding the questions. Submit review
+      when done.
+    </p>
+
+  </main>
+  <script src="comments.js"></script>
+</body>
+</html>

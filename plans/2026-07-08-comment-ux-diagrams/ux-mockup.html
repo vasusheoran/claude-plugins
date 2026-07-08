@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comment mode — live mockup</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    /* Demo-only styles. The demo simulates the PROPOSED review UI inside a frame;
+       elements deliberately carry no data-block-id so the real comments.js
+       ignores them. */
+    .demo-frame { border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
+    .demo-nav { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: #e9edf3; border-bottom: 1px solid var(--line-strong); font-size: 13px; }
+    .demo-nav .spacer { flex: 1; }
+    .demo-btn { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 7px;
+      padding: 5px 12px; font-size: 13px; cursor: pointer; }
+    .demo-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .demo-body { padding: 18px; position: relative; }
+    .demo-body.mode { cursor: crosshair; }
+    .demo-el { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .demo-hl { position: absolute; pointer-events: none; border: 2px solid var(--accent);
+      border-radius: 4px; background: color-mix(in srgb, var(--accent) 8%, transparent);
+      display: none; z-index: 5; }
+    .demo-chip { float: right; font-size: 11px; font-family: var(--mono); color: var(--accent);
+      border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; cursor: pointer; }
+    .demo-pin { position: absolute; width: 18px; height: 18px; border-radius: 999px 999px 999px 3px;
+      background: var(--accent); color: #fff; font-size: 10px; line-height: 18px;
+      text-align: center; z-index: 6; }
+    .demo-composer { position: absolute; z-index: 7; width: 240px; background: var(--bg);
+      border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12); font-size: 12px; display: none; }
+    .demo-composer .anchor-tag { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .demo-composer textarea { width: 100%; box-sizing: border-box; margin: 6px 0; height: 44px;
+      border: 1px solid var(--line); border-radius: 6px; font: inherit; padding: 4px; }
+    .demo-state-msg { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .proto-btn { padding: 8px 16px; border-radius: 7px; border: 1px solid var(--line-strong);
+      background: var(--bg-soft); cursor: pointer; }
+    .proto-btn.clicked { background: var(--decision); color: #fff; }
+    kbd { border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px;
+      padding: 0 5px; font-family: var(--mono); font-size: 0.85em; background: var(--bg-soft); }
+  </style>
+</head>
+<body data-approval="off">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">MOCKUP — proposed comment UX, working demo</span>
+      <span>Created 2026-07-08</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>Comment mode — try it</h1>
+
+    <section class="block" data-block-id="how" data-block-label="How to drive the demo">
+      <h2>Drive it</h2>
+      <p>The frame below simulates the proposed review UI. Click <strong>Comment</strong>
+         (or press <kbd>C</kbd> while the pointer is over the frame) —
+         then <strong>hover</strong> to see target snapping, <strong>click</strong> an
+         element to anchor a comment, <strong>Alt-click</strong> to drop a point pin,
+         or <strong>select text</strong> to quote it. <kbd>Esc</kbd> exits. Note the two
+         things that are gone: no hover 💬 on blocks, and with the mode <em>off</em> the
+         prototype button actually works — nothing intercepts it.</p>
+    </section>
+
+    <section class="block" data-block-id="demo" data-block-label="Interactive demo">
+      <div class="demo-frame">
+        <div class="demo-nav">
+          <strong>canvas/example</strong>
+          <span class="demo-state-msg" id="demo-msg">mode off — artifact owns all events</span>
+          <span class="spacer"></span>
+          <button class="demo-btn" id="demo-comment" data-cmt-id="demo-comment-btn">💬 Comment</button>
+          <button class="demo-btn">Comments <b id="demo-count">1</b></button>
+        </div>
+        <div class="demo-body" id="demo-body">
+          <div class="demo-hl" id="demo-hl"></div>
+          <div class="demo-el" data-demo="intro-block">
+            <span class="demo-chip" title="1 open comment — click to open the panel at this thread">1 ●</span>
+            <strong>A prose block.</strong> This block already has an open comment — the
+            chip at the right is the proposed indicator (question q-indicator on the plan
+            tab). Select some of this text while in Comment mode to create a quote
+            comment.
+          </div>
+          <div class="demo-el" data-demo="mock-screen">
+            <strong>An interactive mockup element.</strong><br/><br/>
+            <button class="proto-btn" id="proto-btn" data-demo="proto-button">Sign in (prototype logic)</button>
+            <span class="demo-state-msg" id="proto-msg"></span>
+          </div>
+          <div class="demo-el" data-demo="diagram-area" style="text-align:center; color: var(--muted);">
+            [ diagram area — Alt-click anywhere in here to pin a point ]
+          </div>
+          <div class="demo-composer" id="demo-composer">
+            <span class="anchor-tag" id="demo-anchor-tag"></span>
+            <textarea placeholder="Comment…"></textarea>
+            <button class="demo-btn">Add comment</button>
+            <button class="demo-btn on">Submit</button>
+          </div>
+        </div>
+      </div>
+      <div class="wf-cap">Working demo of the proposed model — sticky mode, snap highlight, element/pin/quote anchors, zero injected affordances.</div>
+    </section>
+
+    <section class="block" data-block-id="delta" data-block-label="What changes vs today">
+      <h2>What disappears, what remains</h2>
+      <div class="columns">
+        <div>
+          <div class="col-title">Removed</div>
+          <ul>
+            <li>Hover 💬 button injected into every block</li>
+            <li>Global Alt-click (armed even outside any mode)</li>
+            <li>Quote capture on affordance click</li>
+          </ul>
+        </div>
+        <div>
+          <div class="col-title">Kept (display only)</div>
+          <ul>
+            <li>Pins, quote highlights, outlines on commented elements</li>
+            <li>Comments panel, threads, resolve/reopen</li>
+            <li>Submit review on gated pages; tabs</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script>
+    /* Demo state machine — mirrors the proposed comments.js behavior. */
+    (function () {
+      var mode = false;
+      var body = document.getElementById("demo-body");
+      var hl = document.getElementById("demo-hl");
+      var btn = document.getElementById("demo-comment");
+      var msg = document.getElementById("demo-msg");
+      var composer = document.getElementById("demo-composer");
+      var anchorTag = document.getElementById("demo-anchor-tag");
+      var overFrame = false;
+
+      function setMode(on) {
+        mode = on;
+        body.classList.toggle("mode", on);
+        btn.classList.toggle("on", on);
+        msg.textContent = on
+          ? "comment mode — click: element · alt-click: pin · select: quote · Esc: exit"
+          : "mode off — artifact owns all events";
+        if (!on) { hl.style.display = "none"; composer.style.display = "none"; }
+      }
+
+      function target(el) { return el.closest("[data-demo]"); }
+
+      function place(el, x, y) {
+        var b = body.getBoundingClientRect();
+        composer.style.display = "block";
+        composer.style.left = Math.min(x - b.left, b.width - 260) + "px";
+        composer.style.top = (y - b.top + 12) + "px";
+        composer.querySelector("textarea").value = "";
+      }
+
+      btn.addEventListener("click", function () { setMode(!mode); });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && mode) setMode(false);
+        if ((e.key === "c" || e.key === "C") && !e.metaKey && !e.ctrlKey && !e.altKey &&
+            overFrame && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) setMode(!mode);
+      });
+      body.closest(".demo-frame").addEventListener("mouseenter", function () { overFrame = true; });
+      body.closest(".demo-frame").addEventListener("mouseleave", function () { overFrame = false; });
+
+      body.addEventListener("mousemove", function (e) {
+        if (!mode) return;
+        var t = target(e.target);
+        if (!t || e.target.closest(".demo-composer")) { hl.style.display = "none"; return; }
+        var r = t.getBoundingClientRect(), b = body.getBoundingClientRect();
+        hl.style.display = "block";
+        hl.style.left = (r.left - b.left) + "px";
+        hl.style.top = (r.top - b.top) + "px";
+        hl.style.width = r.width + "px";
+        hl.style.height = r.height + "px";
+      });
+
+      body.addEventListener("click", function (e) {
+        if (e.target.closest(".demo-composer")) return;
+        if (!mode) return;
+        e.preventDefault(); e.stopPropagation();
+        var t = target(e.target);
+        if (!t) return;
+        if (e.altKey) {
+          var r = t.getBoundingClientRect(), b = body.getBoundingClientRect();
+          var pin = document.createElement("span");
+          pin.className = "demo-pin";
+          pin.textContent = "●";
+          pin.style.left = (e.clientX - b.left - 9) + "px";
+          pin.style.top = (e.clientY - b.top - 9) + "px";
+          body.appendChild(pin);
+          anchorTag.textContent = "📍 pinned at " +
+            Math.round((e.clientX - r.left) / r.width * 100) + "%, " +
+            Math.round((e.clientY - r.top) / r.height * 100) + "% of " + t.getAttribute("data-demo");
+        } else {
+          anchorTag.textContent = "◉ " + t.getAttribute("data-demo");
+        }
+        place(t, e.clientX, e.clientY);
+      }, true);
+
+      body.addEventListener("mouseup", function (e) {
+        if (!mode || e.target.closest(".demo-composer")) return;
+        var sel = String(window.getSelection()).trim();
+        if (sel.length < 3) return;
+        anchorTag.textContent = "❝ " + (sel.length > 40 ? sel.slice(0, 40) + "…" : sel) + " ❞";
+        place(target(e.target) || body, e.clientX, e.clientY);
+      });
+
+      /* The prototype's own logic — works only when mode is OFF, proving the
+         review UI no longer steals events from interactive artifacts. */
+      document.getElementById("proto-btn").addEventListener("click", function (e) {
+        if (mode) return;
+        e.target.classList.toggle("clicked");
+        document.getElementById("proto-msg").textContent =
+          e.target.classList.contains("clicked") ? " → prototype handled the click" : "";
+      });
+    })();
+  </script>
+</body>
+</html>

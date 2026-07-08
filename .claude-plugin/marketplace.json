@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "vasusheoran-plugins",
-  "description": "Personal Claude Code plugins — homelab infrastructure management, documentation, and ops tooling",
+  "description": "Personal Claude Code plugins \u2014 homelab infrastructure management, documentation, and ops tooling",
   "owner": {
     "name": "Vasu Sheoran",
     "email": "vasusheoran92@gmail.com"
@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "homelab",
-      "description": "Homelab management plugin — Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, and statusline setup.",
+      "description": "Homelab management plugin \u2014 Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, and statusline setup.",
       "author": {
         "name": "Vasu Sheoran"
       },
@@ -19,13 +19,13 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/homelab",
         "ref": "main",
-        "sha": "a546a80261244e44b096589608d13800b9a3293d"
+        "sha": "e3ffdf28fa0f94fb598af9e9c7c16b79937c2b7d"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
     },
     {
       "name": "canvas",
-      "description": "Local canvas for Claude Code — plans, UI mockups, decision docs, and diagrams as reviewable HTML workspaces with inline comments and a push review loop. Stdlib-only, localhost-only.",
+      "description": "Local canvas for Claude Code \u2014 plans, UI mockups, decision docs, and diagrams as reviewable HTML workspaces with inline comments and a push review loop. Stdlib-only, localhost-only.",
       "author": {
         "name": "Vasu Sheoran"
       },
@@ -35,7 +35,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/canvas",
         "ref": "main",
-        "sha": "a546a80261244e44b096589608d13800b9a3293d"
+        "sha": "e3ffdf28fa0f94fb598af9e9c7c16b79937c2b7d"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
     }

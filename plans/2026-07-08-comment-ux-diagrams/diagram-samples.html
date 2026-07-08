@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagram samples — sequence & flowchart</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    .spec pre { font-size: 11.5px; line-height: 1.45; }
+    svg text { font-family: var(--sans); font-size: 12px; fill: var(--ink); }
+    svg text.mono { font-family: var(--mono); font-size: 11px; }
+    svg text.muted { fill: var(--muted); }
+    svg text.yesno { font-size: 11px; fill: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body data-approval="off">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">SAMPLES — target rendering style for diagram.js</span>
+      <span>Created 2026-07-08</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>What diagram.js output looks like</h1>
+
+    <section class="block" data-block-id="intro" data-block-label="Intro">
+      <p>Both diagrams below are hand-authored to the exact geometry rules
+         <code>diagram.js</code> will implement — judge the <em>style</em> here.
+         Next to each: the JSON spec that would generate it. Every box, lifeline, and
+         labelled message carries <code>data-cmt-id</code> — use <strong>mark</strong> in
+         the nav and hover the diagrams to feel the per-element comment anchoring.</p>
+    </section>
+
+    <section class="block" data-block-id="seq-sample" data-block-label="Sequence sample">
+      <h2>Sequence — the push review loop (real example)</h2>
+      <svg viewBox="0 0 640 380" role="img" aria-label="Push review loop" style="max-width:680px">
+        <defs>
+          <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--line-strong)"/>
+          </marker>
+        </defs>
+        <!-- participants -->
+        <g data-cmt-id="p-reviewer" data-cmt-label="Reviewer">
+          <rect x="20" y="10" width="100" height="34" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="70" y="31" text-anchor="middle">Reviewer</text>
+          <line x1="70" y1="44" x2="70" y2="360" stroke="var(--line)" stroke-dasharray="4 4"/>
+        </g>
+        <g data-cmt-id="p-browser" data-cmt-label="Browser">
+          <rect x="140" y="10" width="100" height="34" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="190" y="31" text-anchor="middle">Browser</text>
+          <line x1="190" y1="44" x2="190" y2="360" stroke="var(--line)" stroke-dasharray="4 4"/>
+        </g>
+        <g data-cmt-id="p-server" data-cmt-label="serve.py">
+          <rect x="270" y="10" width="100" height="34" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="320" y="31" text-anchor="middle" class="mono">serve.py</text>
+          <line x1="320" y1="44" x2="320" y2="360" stroke="var(--line)" stroke-dasharray="4 4"/>
+        </g>
+        <g data-cmt-id="p-watcher" data-cmt-label="Watcher">
+          <rect x="400" y="10" width="100" height="34" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="450" y="31" text-anchor="middle">Watcher</text>
+          <line x1="450" y1="44" x2="450" y2="360" stroke="var(--line)" stroke-dasharray="4 4"/>
+        </g>
+        <g data-cmt-id="p-claude" data-cmt-label="Claude">
+          <rect x="520" y="10" width="100" height="34" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="570" y="31" text-anchor="middle">Claude</text>
+          <line x1="570" y1="44" x2="570" y2="360" stroke="var(--line)" stroke-dasharray="4 4"/>
+        </g>
+        <!-- messages, evenly spaced -->
+        <g data-cmt-id="m-longpoll" data-cmt-label="long-poll">
+          <line x1="450" y1="80" x2="322" y2="80" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="386" y="72" text-anchor="middle" class="mono">GET /api/wait (blocks)</text>
+        </g>
+        <g data-cmt-id="m-submit" data-cmt-label="Submit review">
+          <line x1="70" y1="116" x2="188" y2="116" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="130" y="108" text-anchor="middle">Submit review</text>
+        </g>
+        <g data-cmt-id="m-approval" data-cmt-label="POST approval">
+          <line x1="190" y1="152" x2="318" y2="152" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="255" y="144" text-anchor="middle" class="mono">POST /api/approval</text>
+        </g>
+        <g data-cmt-id="m-fire" data-cmt-label="wait fires">
+          <line x1="320" y1="188" x2="448" y2="188" stroke="var(--line-strong)" stroke-dasharray="5 4" marker-end="url(#arw)"/>
+          <text x="386" y="180" text-anchor="middle" class="mono">{"event":"approval"}</text>
+        </g>
+        <g data-cmt-id="m-wake" data-cmt-label="wake">
+          <line x1="450" y1="224" x2="568" y2="224" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="510" y="216" text-anchor="middle">exit → harness wakes</text>
+        </g>
+        <g data-cmt-id="m-read" data-cmt-label="read state">
+          <line x1="570" y1="260" x2="322" y2="260" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="446" y="252" text-anchor="middle" class="mono">GET comments · answers · approval</text>
+        </g>
+        <g data-cmt-id="m-ack" data-cmt-label="ack">
+          <line x1="570" y1="296" x2="322" y2="296" stroke="var(--line-strong)" marker-end="url(#arw)"/>
+          <text x="446" y="288" text-anchor="middle" class="mono">POST /api/ack</text>
+        </g>
+        <g data-cmt-id="m-confirm" data-cmt-label="confirmation">
+          <line x1="320" y1="332" x2="192" y2="332" stroke="var(--line-strong)" stroke-dasharray="5 4" marker-end="url(#arw)"/>
+          <text x="255" y="324" text-anchor="middle">“acknowledged by Claude”</text>
+        </g>
+      </svg>
+      <div class="wf-cap">Solid = calls · dashed = returns/notifications · y-order = message order (renderer computes spacing)</div>
+
+      <details class="spec"><summary>The spec that would generate this</summary>
+        <pre>{ "type": "sequence",
+  "participants": [
+    {"id": "p-reviewer", "label": "Reviewer"},
+    {"id": "p-browser",  "label": "Browser"},
+    {"id": "p-server",   "label": "serve.py"},
+    {"id": "p-watcher",  "label": "Watcher"},
+    {"id": "p-claude",   "label": "Claude"} ],
+  "messages": [
+    {"id": "m-longpoll", "from": "p-watcher",  "to": "p-server",  "label": "GET /api/wait (blocks)"},
+    {"id": "m-submit",   "from": "p-reviewer", "to": "p-browser", "label": "Submit review"},
+    {"id": "m-approval", "from": "p-browser",  "to": "p-server",  "label": "POST /api/approval"},
+    {"id": "m-fire",     "from": "p-server",   "to": "p-watcher", "label": "{\"event\":\"approval\"}", "style": "return"},
+    {"id": "m-wake",     "from": "p-watcher",  "to": "p-claude",  "label": "exit → harness wakes"},
+    {"id": "m-read",     "from": "p-claude",   "to": "p-server",  "label": "GET comments · answers · approval"},
+    {"id": "m-ack",      "from": "p-claude",   "to": "p-server",  "label": "POST /api/ack"},
+    {"id": "m-confirm",  "from": "p-server",   "to": "p-browser", "label": "“acknowledged by Claude”", "style": "return"} ] }</pre>
+      </details>
+    </section>
+
+    <section class="block" data-block-id="flow-sample" data-block-label="Flowchart sample">
+      <h2>Flowchart — how a pointer-up resolves to an anchor (real example)</h2>
+      <svg viewBox="0 0 640 300" role="img" aria-label="Anchor resolution" style="max-width:680px">
+        <defs>
+          <marker id="arw2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--line-strong)"/>
+          </marker>
+        </defs>
+        <g data-cmt-id="f-start" data-cmt-label="pointer-up">
+          <rect x="20" y="30" width="170" height="48" rx="24" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+          <text x="105" y="59" text-anchor="middle">pointer-up in mode</text>
+        </g>
+        <g data-cmt-id="f-alt" data-cmt-label="Alt held?">
+          <path d="M325,26 L400,54 L325,82 L250,54 z" fill="var(--bg)" stroke="var(--line-strong)"/>
+          <text x="325" y="58" text-anchor="middle">Alt held?</text>
+        </g>
+        <g data-cmt-id="f-pin" data-cmt-label="point pin">
+          <rect x="450" y="30" width="170" height="48" rx="8" fill="var(--bg-soft)" stroke="var(--line)"/>
+          <text x="535" y="59" text-anchor="middle" class="mono">point pin {x,y}%</text>
+        </g>
+        <g data-cmt-id="f-sel" data-cmt-label="selection?">
+          <path d="M325,126 L400,154 L325,182 L250,154 z" fill="var(--bg)" stroke="var(--line-strong)"/>
+          <text x="325" y="158" text-anchor="middle">text selected?</text>
+        </g>
+        <g data-cmt-id="f-quote" data-cmt-label="quote anchor">
+          <rect x="450" y="130" width="170" height="48" rx="8" fill="var(--bg-soft)" stroke="var(--line)"/>
+          <text x="535" y="159" text-anchor="middle">quote anchor</text>
+        </g>
+        <g data-cmt-id="f-element" data-cmt-label="element anchor">
+          <rect x="450" y="230" width="170" height="48" rx="8" fill="var(--bg-soft)" stroke="var(--line)"/>
+          <text x="535" y="253" text-anchor="middle">element anchor</text>
+          <text x="535" y="269" text-anchor="middle" class="mono muted">snap to data-cmt-id</text>
+        </g>
+        <path d="M190,54 L250,54" fill="none" stroke="var(--line-strong)" marker-end="url(#arw2)"/>
+        <path d="M400,54 L450,54" fill="none" stroke="var(--line-strong)" marker-end="url(#arw2)"/>
+        <text x="418" y="46" class="yesno">yes</text>
+        <path d="M325,82 L325,126" fill="none" stroke="var(--line-strong)" marker-end="url(#arw2)"/>
+        <text x="333" y="108" class="yesno">no</text>
+        <path d="M400,154 L450,154" fill="none" stroke="var(--line-strong)" marker-end="url(#arw2)"/>
+        <text x="418" y="146" class="yesno">yes</text>
+        <path d="M325,182 L325,254 L450,254" fill="none" stroke="var(--line-strong)" marker-end="url(#arw2)"/>
+        <text x="333" y="215" class="yesno">no</text>
+      </svg>
+      <div class="wf-cap">Grid-placed nodes (col/row in the spec) · diamonds = decisions · orthogonal edges with yes/no labels · all three outcomes open the composer</div>
+
+      <details class="spec"><summary>The spec that would generate this</summary>
+        <pre>{ "type": "flow",
+  "nodes": [
+    {"id": "f-start",   "label": "pointer-up in mode",  "kind": "start",    "col": 0, "row": 0},
+    {"id": "f-alt",     "label": "Alt held?",           "kind": "decision", "col": 1, "row": 0},
+    {"id": "f-pin",     "label": "point pin {x,y}%",    "kind": "step",     "col": 2, "row": 0},
+    {"id": "f-sel",     "label": "text selected?",      "kind": "decision", "col": 1, "row": 1},
+    {"id": "f-quote",   "label": "quote anchor",        "kind": "step",     "col": 2, "row": 1},
+    {"id": "f-element", "label": "element anchor\nsnap to data-cmt-id", "kind": "step", "col": 2, "row": 2} ],
+  "edges": [
+    {"from": "f-start", "to": "f-alt"},
+    {"from": "f-alt",   "to": "f-pin",     "label": "yes"},
+    {"from": "f-alt",   "to": "f-sel",     "label": "no"},
+    {"from": "f-sel",   "to": "f-quote",   "label": "yes"},
+    {"from": "f-sel",   "to": "f-element", "label": "no"} ] }</pre>
+      </details>
+    </section>
+
+    <section class="block" data-block-id="chooser" data-block-label="Which diagram when">
+      <h2>Which diagram when</h2>
+      <table>
+        <thead><tr><th>The work involves…</th><th>Use</th><th>Authored as</th></tr></thead>
+        <tbody>
+          <tr><td>actors/services exchanging calls over time — protocols, auth flows, review loops</td><td><strong>sequence</strong></td><td>diagram.js spec</td></tr>
+          <tr><td>branching logic, processes, retry/decision trees</td><td><strong>flowchart</strong></td><td>diagram.js spec</td></tr>
+          <tr><td>freeform structure — topology, layers, deployment</td><td><strong>hand SVG</strong></td><td><code>svg-diagrams.md</code> rules</td></tr>
+          <tr><td>a plain linear chain, quickly</td><td><strong>div kit</strong></td><td><code>.diagram</code> classes</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+</body>
+</html>
