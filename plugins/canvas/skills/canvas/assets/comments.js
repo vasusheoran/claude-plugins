@@ -190,11 +190,21 @@
   document.addEventListener("mousemove", function (e) {
     if (!pickMode) return;
     if (isOwnUi(e.target)) { if (pickOverlay) pickOverlay.style.display = "none"; return; }
-    var r = pickTarget(e.target).getBoundingClientRect();
+    var picked = pickTarget(e.target);
+    var r = picked.getBoundingClientRect();
     var o = ensureOverlay();
     o.style.display = "block";
     o.style.left = r.left + "px"; o.style.top = r.top + "px";
     o.style.width = r.width + "px"; o.style.height = r.height + "px";
+    // Label the overlay for the CSS ::after tag (display-only). Prefer an
+    // explicit component label, then the enclosing block's label, then a
+    // trimmed tag/text fallback — the same precedence openComposer uses.
+    var host = picked.closest && picked.closest("[data-block-id]");
+    var label = (picked.getAttribute && picked.getAttribute("data-cmt-label")) ||
+      (host && host.getAttribute && host.getAttribute("data-block-label")) ||
+      ((picked.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40)) ||
+      (picked.tagName ? picked.tagName.toLowerCase() : "element");
+    o.setAttribute("data-label", label);
   }, true);
 
   // Single pointer-up resolver for all three anchor kinds. Runs only in-mode;
@@ -696,8 +706,11 @@
         : "submitted · awaiting Claude…";
     // Pages with data-approval="off" drop the whole approval gate (status,
     // hint, note, submit); Comment mode and comments stay unchanged.
+    // Hint state class mirrors the hint-text branches above so plan.css can
+    // color/animate each phase (display-only).
+    var hintState = !s ? (pending ? "changes" : "ready") : (acked ? "acked" : "awaiting");
     var apprHtml = approvalOff() ? "" :
-      statusHtml + '<span class="appr-hint' + (acked ? " acked" : "") + '">' + hint + "</span>" +
+      statusHtml + '<span class="appr-hint ' + hintState + '">' + hint + "</span>" +
       '<input class="appr-note" placeholder="note (optional)" value="' +
         escapeHtml((state.approval && state.approval.note) || "") + '">' +
       '<button class="cmt-btn primary submit-review">Submit review</button>';
