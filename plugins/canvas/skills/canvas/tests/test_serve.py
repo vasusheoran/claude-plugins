@@ -107,14 +107,16 @@ class CommentStoreTests(TmpDirCase):
 class SafePathTests(TmpDirCase):
     def test_allows_normal_file(self):
         (self.tmp / "plan.html").write_text("hi")
+        # resolve() both sides: macOS tempdirs live behind a /var symlink
         self.assertEqual(serve.safe_path(self.tmp, "/plan.html"),
-                         self.tmp / "plan.html")
+                         (self.tmp / "plan.html").resolve())
 
     def test_blocks_traversal(self):
         self.assertIsNone(serve.safe_path(self.tmp, "/../../etc/passwd"))
 
     def test_root_is_plan_html(self):
-        self.assertEqual(serve.safe_path(self.tmp, "/"), self.tmp / "plan.html")
+        self.assertEqual(serve.safe_path(self.tmp, "/"),
+                         (self.tmp / "plan.html").resolve())
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +357,184 @@ class NewHttpTests(TmpDirCase):
         _req("POST", f"{self.base}/api/comments", {"blockId": "a", "body": "hi"})
         _, v2 = _req("GET", f"{self.base}/api/version")
         self.assertNotEqual(v1["comments"], v2["comments"])
+
+
+# ---------------------------------------------------------------------------
+# Workspace pages: /api/pages lists every HTML artifact for the tab nav
+# ---------------------------------------------------------------------------
+
+def _start_threading_server(plan_dir):
+    """Like _start_server but multi-threaded, so a blocking /api/wait request
+    does not starve the POST that is supposed to fire it."""
+    from http.server import ThreadingHTTPServer
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(plan_dir))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, httpd.server_address[1]
+
+
+class PagesApiTests(TmpDirCase):
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "plan.html").write_text(
+            "<html><head><title>My Plan</title></head><body>p</body></html>")
+        (self.tmp / "mockup.html").write_text(
+            "<html><head><title>Mockup A</title></head><body>m</body></html>")
+        (self.tmp / "notes.txt").write_text("not a page")
+        self.httpd, port = _start_server(self.tmp)
+        self.base = f"http://127.0.0.1:{port}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        super().tearDown()
+
+    def test_lists_only_html_with_plan_first(self):
+        status, data = _req("GET", f"{self.base}/api/pages")
+        self.assertEqual(status, 200)
+        self.assertEqual([p["file"] for p in data["pages"]],
+                         ["plan.html", "mockup.html"])
+
+    def test_titles_come_from_title_tag(self):
+        _, data = _req("GET", f"{self.base}/api/pages")
+        by_file = {p["file"]: p["title"] for p in data["pages"]}
+        self.assertEqual(by_file["plan.html"], "My Plan")
+        self.assertEqual(by_file["mockup.html"], "Mockup A")
+
+    def test_title_falls_back_to_filename(self):
+        (self.tmp / "raw.html").write_text("<body>no title</body>")
+        _, data = _req("GET", f"{self.base}/api/pages")
+        by_file = {p["file"]: p["title"] for p in data["pages"]}
+        self.assertEqual(by_file["raw.html"], "raw.html")
+
+
+# ---------------------------------------------------------------------------
+# Page-keyed comments: multi-artifact workspaces anchor comments per page
+# ---------------------------------------------------------------------------
+
+class PageFieldTests(TmpDirCase):
+    def test_comment_persists_page(self):
+        c = serve.CommentStore(self.tmp / "comments.json").add(
+            {"blockId": "a", "body": "x", "page": "mockup.html"})
+        self.assertEqual(c["page"], "mockup.html")
+
+    def test_page_defaults_to_plan_html(self):
+        # Back-compat: state written by older clients (no page field) must
+        # keep anchoring to the single plan page.
+        c = serve.CommentStore(self.tmp / "comments.json").add(
+            {"blockId": "a", "body": "x"})
+        self.assertEqual(c["page"], "plan.html")
+
+    def test_http_roundtrip_keeps_page(self):
+        (self.tmp / "plan.html").write_text("p")
+        httpd, port = _start_server(self.tmp)
+        try:
+            base = f"http://127.0.0.1:{port}"
+            _req("POST", f"{base}/api/comments",
+                 {"blockId": "a", "body": "x", "page": "flow.html"})
+            _, listing = _req("GET", f"{base}/api/comments")
+            self.assertEqual(listing["comments"][0]["page"], "flow.html")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+# ---------------------------------------------------------------------------
+# EventBus: the push mechanism behind /api/wait
+# ---------------------------------------------------------------------------
+
+class EventBusTests(unittest.TestCase):
+    def test_notify_returns_increasing_cursors(self):
+        bus = serve.EventBus()
+        self.assertLess(bus.notify("comment"), bus.notify("approval"))
+
+    def test_wait_returns_immediately_for_past_event(self):
+        bus = serve.EventBus()
+        bus.notify("approval")
+        got = bus.wait(since=0, timeout=1)
+        self.assertEqual(got["event"], "approval")
+        self.assertGreater(got["cursor"], 0)
+
+    def test_wait_times_out_with_null_event(self):
+        bus = serve.EventBus()
+        got = bus.wait(since=0, timeout=0.05)
+        self.assertIsNone(got["event"])
+
+    def test_wait_filters_kinds(self):
+        # An "answer" event must not satisfy a waiter that only listens for
+        # comment/approval — it keeps waiting and times out.
+        bus = serve.EventBus()
+        bus.notify("answer")
+        got = bus.wait(since=0, kinds={"comment", "approval"}, timeout=0.05)
+        self.assertIsNone(got["event"])
+        got = bus.wait(since=0, kinds=None, timeout=0.05)
+        self.assertEqual(got["event"], "answer")
+
+    def test_wait_blocks_until_notified(self):
+        bus = serve.EventBus()
+        threading.Timer(0.1, lambda: bus.notify("comment")).start()
+        got = bus.wait(since=0, timeout=5)
+        self.assertEqual(got["event"], "comment")
+
+
+# ---------------------------------------------------------------------------
+# /api/wait: what wakes the agent (decided in the canvas-rework plan review:
+# Submit review + Submit-to-Claude comments fire; notes and answers do not,
+# unless the watcher opts in with events=any)
+# ---------------------------------------------------------------------------
+
+class WaitApiTests(TmpDirCase):
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "plan.html").write_text("p")
+        self.httpd, port = _start_threading_server(self.tmp)
+        self.base = f"http://127.0.0.1:{port}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        super().tearDown()
+
+    def test_timeout_returns_null_event_and_cursor(self):
+        status, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=0.1")
+        self.assertEqual(status, 200)
+        self.assertIsNone(got["event"])
+        self.assertIn("cursor", got)
+
+    def test_agent_comment_fires_wait(self):
+        def later():
+            _req("POST", f"{self.base}/api/comments",
+                 {"blockId": "a", "body": "do this", "target": "agent"})
+        threading.Timer(0.1, later).start()
+        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=5")
+        self.assertEqual(got["event"], "comment")
+
+    def test_human_note_does_not_fire_wait(self):
+        _req("POST", f"{self.base}/api/comments",
+             {"blockId": "a", "body": "just a note", "target": "human"})
+        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=0.1")
+        self.assertIsNone(got["event"])
+
+    def test_approval_fires_wait(self):
+        _req("POST", f"{self.base}/api/approval", {"state": "approved"})
+        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=1")
+        self.assertEqual(got["event"], "approval")
+
+    def test_answers_fire_only_with_events_any(self):
+        _req("POST", f"{self.base}/api/answers",
+             {"questionId": "q1", "mode": "single", "value": "a"})
+        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=0.1")
+        self.assertIsNone(got["event"])
+        _, got = _req("GET",
+                      f"{self.base}/api/wait?since=0&timeout=1&events=any")
+        self.assertEqual(got["event"], "answer")
+
+    def test_cursor_advances_past_delivered_events(self):
+        _req("POST", f"{self.base}/api/approval", {"state": "approved"})
+        _, first = _req("GET", f"{self.base}/api/wait?since=0&timeout=1")
+        self.assertEqual(first["event"], "approval")
+        _, second = _req("GET",
+                         f"{self.base}/api/wait?since={first['cursor']}&timeout=0.1")
+        self.assertIsNone(second["event"])
 
 
 if __name__ == "__main__":
