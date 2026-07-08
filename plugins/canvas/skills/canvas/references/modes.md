@@ -90,6 +90,9 @@ makes the review sharper. Model secondary states that interaction would hide
 `mockup-b.html`). **Read** `wireframe.md`; the shared authoring bar in
 `document-quality.md` still applies.
 
+Interactive mockups are safe: the review UI only listens while Comment mode is
+on, so a reviewer clicking through a prototype never trips the comment picker.
+
 **Done** when every frame reads as a real screen (no lorem, no dead controls
 that look live), variants are labelled, and the reviewer can comment on any
 control.
@@ -123,14 +126,19 @@ explicit sign-off on the chosen option, not just an answer.
 flow, lanes, fan-in/fan-out, a sequence — where a left-to-right chain is too
 flat.
 
-**Contains.** One hand-authored inline `<svg>` per decision, tokens via
-`var(--ink)` etc., nodes tagged `data-cmt-id` so reviewers can pin comments to
-elements.
+**Contains.** One diagram per decision. Prefer a `diagram.js` JSON spec for a
+sequence (actors over time) or flow (branching logic) — it emits token-styled SVG
+with `data-cmt-id` anchors for you. Use a hand-authored inline `<svg>` for
+freeform architecture/topology, tokens via `var(--ink)` etc., nodes tagged
+`data-cmt-id`. Pick the form from the chooser at the top of `svg-diagrams.md`.
 
-**Start from** `canvas.html`. **Read** `svg-diagrams.md`.
+**Start from** `canvas.html`. **Read** `svg-diagrams.md` (the chooser picks
+diagram.js vs. hand SVG vs. the div kit). For a diagram.js spec, load
+`diagram.js` in the artifact after `comments.js`.
 
 **Done** when the diagram is readable at 100% zoom, labels don't overlap edges,
-and the discussable nodes are tagged.
+and the discussable nodes/participants are anchored (automatic for diagram.js
+specs, hand-tagged for SVG).
 
 ---
 

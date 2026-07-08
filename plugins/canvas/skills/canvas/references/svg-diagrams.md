@@ -1,18 +1,101 @@
-# SVG diagrams
+# Diagrams
 
-Read before authoring any hand-drawn diagram — for the **diagram** mode and for
-architecture sections inside a plan. The div-based `diagram` kit in `plan.css`
-(`.row`/`.node`/`.arrow`/`.lane`) is for a mostly-linear chain; reach for inline
-SVG when the relationship is genuinely two-dimensional.
+Read before drawing any diagram — for the **diagram** mode and for architecture
+sections inside a plan. Pick the form from the shape of the relationship:
 
-## When SVG over the div kit
+| Relationship | Form | How |
+|--------------|------|-----|
+| Actors over time (calls, acks, returns) | **sequence** | `diagram.js` JSON spec — below |
+| Branching logic / a process with decisions | **flow** | `diagram.js` JSON spec — below |
+| Freeform architecture / topology (lanes, fan-in/out, loops) | **hand SVG** | this doc's rules |
+| Quick linear chain (A → B → C) | **div kit** | `plan.css` `.row`/`.node`/`.arrow`/`.lane` |
+
+Prefer `diagram.js` for the two structured cases — it emits token-styled SVG with
+stable anchors for you. Hand SVG is for genuinely freeform 2-D layouts the two
+spec types don't cover. If it reads as a left-to-right sequence, use the div kit.
+
+## diagram.js specs
+
+Author a spec inline and let `diagram.js` render it at load — no hand geometry:
+
+```html
+<script type="application/json" data-diagram>{ … }</script>
+```
+
+`diagram.js` (loaded after `comments.js`) finds each `[data-diagram]` script,
+parses it, and **replaces** it in place with rendered SVG. A bad spec renders a
+visible inline **error box**, never a broken page. Two `type`s:
+
+### sequence
+
+```json
+{
+  "type": "sequence",
+  "participants": [
+    { "id": "p-browser", "label": "Browser" },
+    { "id": "p-serve",   "label": "serve.py" },
+    { "id": "p-claude",  "label": "Claude" }
+  ],
+  "messages": [
+    { "id": "m-approve", "from": "p-browser", "to": "p-serve",  "label": "POST /api/approval" },
+    { "from": "p-serve", "to": "p-claude", "label": "wake" },
+    { "from": "p-claude", "to": "p-browser", "label": "ack", "style": "return" }
+  ]
+}
+```
+
+- `participants[]` — `{id, label}`, laid out left-to-right; each becomes a
+  lifeline. **`id` required; duplicates error.**
+- `messages[]` — `{from, to, label}` plus optional `id` and
+  `style:"return"`. **Message order is y-order** (top to bottom); `from`/`to`
+  must name existing participants (unknown ref errors). `style:"return"` renders
+  a dashed line for a reply/return.
+
+### flow
+
+```json
+{
+  "type": "flow",
+  "nodes": [
+    { "id": "f-start", "label": "pointer-up",     "kind": "start",    "col": 0, "row": 0 },
+    { "id": "f-alt",   "label": "Alt held?",       "kind": "decision", "col": 1, "row": 0 },
+    { "id": "f-pin",   "label": "point pin",       "kind": "step",     "col": 2, "row": 0 },
+    { "id": "f-el",    "label": "element anchor",   "kind": "step",     "col": 2, "row": 1 }
+  ],
+  "edges": [
+    { "from": "f-start", "to": "f-alt" },
+    { "from": "f-alt", "to": "f-pin", "label": "yes" },
+    { "from": "f-alt", "to": "f-el",  "label": "no" }
+  ]
+}
+```
+
+- `nodes[]` — `{id, label, kind, col, row}`. `kind`: `step` (rect), `decision`
+  (diamond), `start` (pill). **`col` and `row` are required** — placement is
+  grid-based, there is **no auto-layout**; you own the coordinates. Duplicate ids
+  error.
+- `edges[]` — `{from, to}` plus optional `label` (a `yes`/`no` on a decision
+  branch, say). Rendered orthogonal; `from`/`to` must name existing nodes.
+
+### Anchors
+
+`diagram.js` writes `data-cmt-id` for you — no hand-tagging:
+
+- **Every participant and every node** anchors as `data-cmt-id="<its id>"` (and
+  `data-cmt-label` from its label). Give them stable, kebab-case ids — **never
+  renumber**, same rule as `data-block-id`.
+- **A message anchors only when the spec gives it an id.** Id-less messages get
+  no anchor — so if you want a comment to survive edits on a specific message,
+  give it an explicit `id`. **Never rely on a generated id** — there isn't one.
+
+## When hand SVG over diagram.js / the div kit
+
+Reach for inline `<svg>` for freeform 2-D the spec types don't model:
 
 - **2-D relationships** — a thing points at two others, or two things converge.
 - **Lanes / swimlanes** — rows that mean something (client / edge / origin).
 - **Fan-in / fan-out** — one node to many, or many to one.
 - **Non-adjacent edges** — an arrow that skips a column or loops back.
-
-If it reads as a left-to-right sequence, use the div kit and skip SVG.
 
 ## Authoring
 
@@ -45,7 +128,7 @@ If it reads as a left-to-right sequence, use the div kit and skip SVG.
 ## Reviewer anchors
 
 Wrap each node in a `<g>` and put the comment-anchor attributes on the group, so
-a reviewer's **mark** pin snaps to the whole node, not a child `<rect>`:
+a reviewer's Comment-mode click snaps to the whole node, not a child `<rect>`:
 
 ```html
 <g data-cmt-id="edge-worker" data-cmt-label="Edge worker">…rect + text…</g>
