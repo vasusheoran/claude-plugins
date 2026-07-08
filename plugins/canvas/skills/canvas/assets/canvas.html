@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--
+  canvas scaffold for non-plan artifacts (mockup / decide / diagram / doc).
+  Copy this into the workspace once per artifact and rename freely —
+  mockup-a.html, options.html, arch.html, notes.html. serve.py lists every
+  *.html in the folder as a tab.
+  Rules:
+   - Every reviewable section is <section class="block" data-block-id="..."
+     data-block-label="..."> so it can be commented on.
+   - data-block-id must be unique and stable (don't renumber on edits) — comments
+     anchor to it.
+   - Inline CSS/JS is welcome here — use the <style>/<script> slots below for
+     custom styling, clickable states, and variant toggles. Two invariants:
+     (1) keep comments.js loaded (the tag near the bottom); (2) don't remove or
+     renumber anchored elements (data-block-id / data-cmt-id) — your JS must not
+     destroy them, or their comments detach.
+   - <body data-approval="off"> means no approval gate (correct for
+     mockup/diagram/doc). If this artifact should carry the gate (a decide page
+     you want signed off, or a plan-like page), remove data-approval="off".
+   - Keep plan.css / comments.js as sibling files (linked below).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARTIFACT TITLE</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    /* Artifact styles — inline CSS for this page only. Prefer var(--ink),
+       var(--line), var(--accent), … over hard-coded hex so themes hold. */
+  </style>
+</head>
+<body data-approval="off">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">DRAFT — for review</span>
+      <span>Created 2026-07-08</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>ARTIFACT TITLE</h1>
+
+    <section class="block" data-block-id="example" data-block-label="Example block">
+      <h2>Example</h2>
+      <p>Replace this with the artifact's content. Wrap each reviewable section in
+         a <code>block</code> with a stable <code>data-block-id</code>. Reach for
+         the shared vocabulary — callouts, diagrams, file trees, wireframes — from
+         <code>references/document-quality.md</code>, or drop in inline SVG /
+         interactive markup for this page.</p>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script>
+    /* Artifact JS — inline behavior for this page only (clickable states,
+       variant toggles, prototype logic). Must not remove elements that carry
+       data-block-id or data-cmt-id, or their comments detach. */
+  </script>
+</body>
+</html>
