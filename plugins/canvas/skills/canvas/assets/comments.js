@@ -136,12 +136,20 @@
     });
   }
 
-  /* --------------------- element picker ("mark" mode) ---------------- */
+  /* ------------------------- Comment mode ---------------------------- */
 
-  // The "mark" toggle turns the cursor into an element picker (like the browser
-  // inspector): hovering highlights the element under the cursor and a click
-  // anchors a comment to that exact element. Any element is pickable — a tagged
-  // [data-cmt-id] simply yields a cleaner, more stable anchor.
+  // The single entry point for creating comments. Toggling it on turns the
+  // cursor into an element picker (like the browser inspector): hovering
+  // highlights the element under the cursor. Pointer-up then resolves to one of
+  // three anchor kinds, in priority order:
+  //   Alt held           → a pinned point (x/y % within the enclosing block),
+  //   text selection ≥3   → a quote comment on the enclosing block,
+  //   otherwise           → an element anchor (cssPath of the picked element).
+  // The mode is sticky: posting or cancelling a comment keeps it on; only Esc
+  // or re-clicking the nav button exits. Every listener below is a complete
+  // no-op while the mode is off — with it off nothing here touches artifact
+  // events (no preventDefault / stopPropagation), so the plan's own prototype
+  // JS behaves exactly as if this widget weren't present.
   var pickMode = false;
   var pickOverlay = null;
 
@@ -149,12 +157,18 @@
     pickMode = on;
     document.body.classList.toggle("cmt-pick", on);
     if (!on && pickOverlay) pickOverlay.style.display = "none";
+    if (on) {
+      // First-ever activation clears the nudge pulse forever.
+      try {
+        if (!localStorage.getItem("cmt-mode-used")) localStorage.setItem("cmt-mode-used", "1");
+      } catch (e) {}
+    }
     renderNav();
   }
 
   function isOwnUi(el) {
     return !el || !el.closest || !!el.closest(
-      "#cmt-nav, .cmt-composer, .cmt-panel, .cmt-pin, #cmt-pick-overlay");
+      "#cmt-nav, .cmt-composer, .cmt-panel, .cmt-pin, .cmt-chip, #cmt-pick-overlay");
   }
 
   function ensureOverlay() {
@@ -183,14 +197,70 @@
     o.style.width = r.width + "px"; o.style.height = r.height + "px";
   }, true);
 
-  document.addEventListener("click", function (e) {
-    if (!pickMode || e.altKey || isOwnUi(e.target)) return;
+  // Single pointer-up resolver for all three anchor kinds. Runs only in-mode;
+  // when off it returns immediately without touching the event, so artifact
+  // clicks pass straight through to the plan's own handlers.
+  document.addEventListener("mouseup", function (e) {
+    if (!pickMode || isOwnUi(e.target)) return;
+    swallowNextClick = true;
+
+    // Alt held → pinned point anchored as % of the enclosing block.
+    if (e.altKey) {
+      var block = e.target.closest && e.target.closest("[data-block-id]");
+      if (!block) { swallowNextClick = false; return; }  // unhandled — let the click through
+      e.preventDefault(); e.stopPropagation();
+      var r = block.getBoundingClientRect();
+      var anchor = {
+        x: Math.round(((e.clientX - r.left) / r.width) * 100),
+        y: Math.round(((e.clientY - r.top) / r.height) * 100),
+      };
+      openComposer(block, anchor);
+      return;
+    }
+
+    // Non-collapsed text selection of ≥3 chars → quote comment on its block.
+    var sel = window.getSelection ? window.getSelection() : null;
+    var selText = sel && !sel.isCollapsed ? String(sel).trim() : "";
+    if (selText.length >= 3) {
+      var anchorNode = sel.anchorNode;
+      var selHost = anchorNode && anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+      var qblock = selHost && selHost.closest && selHost.closest("[data-block-id]");
+      if (qblock && !isOwnUi(selHost)) {
+        e.preventDefault(); e.stopPropagation();
+        openComposer(qblock, null, false, selText);
+        return;
+      }
+    }
+
+    // Otherwise → element anchor via the picker.
     e.preventDefault(); e.stopPropagation();
     openComposer(pickTarget(e.target), null, true);
   }, true);
 
+  // preventDefault on mouseup does NOT cancel the click the browser fires
+  // next — without this, commenting on a prototype button would also trigger
+  // the button. Swallow exactly the click that follows an in-mode mouseup.
+  var swallowNextClick = false;
+  document.addEventListener("click", function (e) {
+    var swallow = swallowNextClick; swallowNextClick = false;
+    if (!swallow || !pickMode || isOwnUi(e.target)) return;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && pickMode) setPickMode(false);
+    if (e.key === "Escape" && pickMode) { setPickMode(false); return; }
+    // Bare "c"/"C" toggles the mode: no modifiers, not while typing, and only
+    // when the page hasn't opted out via <body data-comment-key="off">.
+    if ((e.key === "c" || e.key === "C") &&
+        !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      var t = e.target;
+      var typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+        (t.isContentEditable));
+      if (typing) return;
+      if (document.body && document.body.getAttribute("data-comment-key") === "off") return;
+      e.preventDefault();
+      setPickMode(!pickMode);
+    }
   });
 
   // A querySelector-able path for an arbitrary element, scoped to its nearest
@@ -242,37 +312,33 @@
   function decorateBlocks() {
     document.querySelectorAll("[data-block-id]").forEach(function (el) {
       el.classList.add("block");
-      if (!el.querySelector(":scope > .comment-affordance")) {
-        var btn = document.createElement("button");
-        btn.className = "comment-affordance";
-        btn.title = "Comment on this block (or Alt-click anywhere in it to pin a point)";
-        btn.textContent = "💬";
-        btn.addEventListener("click", function (e) { e.stopPropagation(); openComposer(el, null); });
-        el.appendChild(btn);
-      }
       var id = el.getAttribute("data-block-id");
-      var has = state.comments.some(function (c) {
+      // Count open top-level comments on this block for the current page.
+      var openHere = state.comments.filter(function (c) {
         return c.blockId === id && c.parentId == null && c.status !== "resolved" && onCurPage(c);
       });
-      el.classList.toggle("has-comments", has);
+      el.classList.toggle("has-comments", openHere.length > 0);
+      // The count chip is a quiet navigation affordance (not a creation one):
+      // clicking it opens the panel at this block's first open comment.
+      var chip = el.querySelector(":scope > .cmt-chip");
+      if (!openHere.length) {
+        if (chip) chip.remove();
+      } else {
+        if (!chip) {
+          chip = document.createElement("button");
+          chip.className = "cmt-chip";
+          el.appendChild(chip);
+        }
+        chip.textContent = openHere.length + " ●";
+        chip.title = openHere.length + " open comment" + (openHere.length === 1 ? "" : "s") +
+          " — click to view";
+        var firstId = openHere[0].id;
+        chip.onclick = function (e) { e.stopPropagation(); openPanelAt(firstId); };
+      }
     });
     renderPins();
     highlightQuotes();
   }
-
-  // Alt-click anywhere inside a block drops a pinned comment at that point.
-  document.addEventListener("click", function (e) {
-    if (!e.altKey) return;
-    var el = e.target.closest("[data-block-id]");
-    if (!el || e.target.closest(".cmt-composer, .comment-affordance, .cmt-pin")) return;
-    e.preventDefault();
-    var r = el.getBoundingClientRect();
-    var anchor = {
-      x: Math.round(((e.clientX - r.left) / r.width) * 100),
-      y: Math.round(((e.clientY - r.top) / r.height) * 100),
-    };
-    openComposer(el, anchor);
-  });
 
   function renderPins() {
     document.querySelectorAll(".cmt-pin").forEach(function (p) { p.remove(); });
@@ -334,7 +400,10 @@
   }
 
   // el is a [data-block-id] section, or any element when asComponent is true.
-  function openComposer(el, anchor, asComponent) {
+  // quoteText, when given, is the selection text for a quote comment — the
+  // caller (Comment mode's pointer-up) passes it explicitly; there is no longer
+  // a passive getSelection() capture here.
+  function openComposer(el, anchor, asComponent, quoteText) {
     closeComposer(true);                          // stash any in-progress draft
     var isComponent = !!asComponent && el && el.nodeType === 1 && el.tagName !== "BODY";
     var host = (el.closest && el.closest("[data-block-id]")) || el;
@@ -346,8 +415,7 @@
          || (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60)
          || el.tagName.toLowerCase())
       : null;
-    var quote = (!anchor && !isComponent)
-      ? String(window.getSelection ? window.getSelection() : "").trim() : null;
+    var quote = (!anchor && !isComponent && quoteText) ? String(quoteText).trim() : null;
 
     var dkey = draftKey({ componentId: componentId, anchor: anchor, quote: quote, blockId: blockId });
     var ctx = componentLabel ? "◉ " + escapeHtml(componentLabel)
@@ -500,8 +568,9 @@
       return c.parentId == null && inView(c);
     });
     var items = tops.map(commentNode).join("") ||
-      '<p style="padding:16px;color:#6b7280">No comments yet. Hover a section and click 💬, ' +
-      'select text to quote it, Alt-click to pin a point, or click <b>mark</b> then any element.</p>';
+      '<p style="padding:16px;color:#6b7280">No comments yet. Click <b>💬 Comment</b> ' +
+      '(or press <b>C</b>), then click an element, Alt-click to pin a point, or ' +
+      'select text to quote it.</p>';
     // "All pages" toggle appears only in a multi-page workspace.
     var multiPage = (state.pages || []).length > 1;
     var toggle = multiPage
@@ -584,11 +653,9 @@
 
   /* ------------------------------- top nav --------------------------- */
 
-  function markIcon() {                            // small pin glyph for "mark"
-    return '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">' +
-      '<path d="M8 1.4a4.2 4.2 0 0 0-4.2 4.2c0 3 4.2 8.8 4.2 8.8s4.2-5.8 4.2-8.8' +
-      'A4.2 4.2 0 0 0 8 1.4Z" fill="currentColor"/>' +
-      '<circle cx="8" cy="5.6" r="1.6" fill="#fff"/></svg>';
+  // Whether the first-use nudge pulse should still play on the Comment button.
+  function nudgeUnused() {
+    try { return !localStorage.getItem("cmt-mode-used"); } catch (e) { return false; }
   }
 
   // Workspace tabs: one per HTML artifact, current page highlighted. Rendered
@@ -628,7 +695,7 @@
           (ack.message ? " — " + escapeHtml(ack.message) : "")
         : "submitted · awaiting Claude…";
     // Pages with data-approval="off" drop the whole approval gate (status,
-    // hint, note, submit); mark picker and comments stay unchanged.
+    // hint, note, submit); Comment mode and comments stay unchanged.
     var apprHtml = approvalOff() ? "" :
       statusHtml + '<span class="appr-hint' + (acked ? " acked" : "") + '">' + hint + "</span>" +
       '<input class="appr-note" placeholder="note (optional)" value="' +
@@ -636,8 +703,10 @@
       '<button class="cmt-btn primary submit-review">Submit review</button>';
     nav.innerHTML =
       tabsHtml() +
-      '<button class="cmt-nav-btn mark' + (pickMode ? " active" : "") + '" id="cmt-mark" ' +
-        'title="mark" aria-label="mark">' + markIcon() + "</button>" +
+      '<button class="cmt-nav-btn cmt-mode' + (pickMode ? " active" : "") +
+        (nudgeUnused() ? " nudge" : "") + '" id="cmt-mark" ' +
+        'title="Comment mode — click an element, Alt-click to pin a point, or ' +
+        'select text to quote (C to toggle, Esc to exit)">💬 Comment</button>' +
       '<button class="cmt-nav-btn" id="cmt-comments">Comments ' +
         '<span class="count">' + openCount() + "</span></button>" +
       '<span class="cmt-nav-spacer"></span>' +
