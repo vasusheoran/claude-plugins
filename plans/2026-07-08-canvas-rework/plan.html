@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canvas rework — Visual Plan</title>
+  <link rel="stylesheet" href="plan.css" />
+</head>
+<body>
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status approved">APPROVED — shipped 2026-07-08 (commit a546a80)</span>
+      <span>Created 2026-07-08</span>
+      <span>Author: Claude</span>
+      <span>Touches: plugins/canvas/* (new plugin) · plugins/homelab/skills/visual-plan/* (moves out) · .claude-plugin/marketplace.json — all in vasusheoran/claude-plugins</span>
+    </div>
+
+    <h1>Rework <code>visual-plan</code> into a local canvas skill</h1>
+
+    <section class="block" data-block-id="outcome" data-block-label="Outcome &amp; scope">
+      <h2>Outcome</h2>
+      <p>One skill that gives Claude Code a <strong>local canvas</strong>: a browser
+         workspace where plans, UI mockups, decision docs, diagrams, and freeform docs
+         are authored as HTML artifacts, reviewed with inline comments and question
+         blocks, and iterated on <strong>live</strong> — Claude is woken the instant a
+         review is submitted, not on a polling interval. Today's implementation-plan
+         discipline survives intact as one <em>mode</em> of the skill instead of being
+         the whole skill.</p>
+      <p><strong>In scope:</strong> multi-artifact workspaces with tab navigation;
+         five modes with mode-appropriate ceremony; per-artifact inline CSS/JS
+         (interactive mockups and prototypes); hand-authored SVG diagram guidance;
+         push-based wake loop via HTTP long-poll; extended tests.
+         <strong>Non-goals:</strong> reviewer drawing/editing on the canvas (the
+         reviewer's tools remain comments, pins, answers, approval); vendored diagram
+         libraries like mermaid (deferred — SVG first); multi-reviewer identity;
+         any non-localhost access; any dependency beyond python3 stdlib + vanilla JS.</p>
+    </section>
+
+    <section class="block" data-block-id="approach" data-block-label="Approach">
+      <h2>Approach</h2>
+      <p><strong>Reuse: the engine already exists.</strong> <code>serve.py</code>
+         (comment/answer/approval/ack stores, atomic JSON writes, digest-based live
+         refresh) and <code>comments.js</code> (element picker, threads,
+         resolve/reopen, question blocks, submit-review bar) are already
+         mode-agnostic — nothing in them is plan-specific. The restrictiveness lives
+         entirely in the doctrine layer: SKILL.md's fixed six-section skeleton, the
+         single <code>plan.html</code> document, the inline-CSS/JS ban, and the
+         approval gate applied to everything. The rework changes the doctrine and
+         makes three surgical engine additions (pages, page-keyed comments, a wait
+         endpoint).</p>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>One skill, modes inside.</strong> The skill becomes engine + mode
+        dispatch; <code>plan</code>, <code>mockup</code>, <code>decide</code>,
+        <code>diagram</code>, <code>doc</code> are reference docs loaded per task.
+        No separate wrapper skills.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Standalone plugin, same repo.</strong> The skill moves out of homelab
+        into a new base plugin: <code>plugins/canvas/</code> in
+        <code>vasusheoran/claude-plugins</code>, with its own
+        <code>.claude-plugin/plugin.json</code> and the skill at
+        <code>skills/canvas/</code> (invoked as <code>canvas:canvas</code>). Move with
+        <code>git mv</code> so file history survives. Homelab drops
+        <code>skills/visual-plan/</code>, and the root
+        <code>.claude-plugin/marketplace.json</code> gains a <code>canvas</code> plugin
+        entry with its own <code>sha</code> pin (homelab's pin bumps too, and "local
+        visual planning" leaves its description). This also settles the rename: the
+        skill is <code>canvas</code>.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Inline CSS/JS is allowed, fully.</strong> Artifacts may carry their own
+        <code>&lt;style&gt;</code> and <code>&lt;script&gt;</code>, including working
+        interactive prototypes with state. Exactly two invariants replace the old ban:
+        (1) <code>comments.js</code> stays loaded on every artifact, (2)
+        <code>data-block-id</code> / <code>data-cmt-id</code> anchors stay stable
+        across edits. <code>plan.css</code> remains the shared base so tokens
+        (<code>--ink</code>, <code>--line</code>, <code>--accent</code>…) and the
+        review UI look consistent.
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Push, not poll, for waking Claude.</strong> <code>serve.py</code> gains
+        a long-poll <code>GET /api/wait</code> backed by a
+        <code>threading.Condition</code>. A background <code>curl</code> blocks on it
+        and exits the moment the reviewer submits — the harness re-invokes Claude
+        immediately. No polling interval, no wasted wakes. The browser keeps its
+        existing <code>/api/version</code> polling for page refresh (that latency was
+        never the problem).
+      </div>
+      <div class="callout decision">
+        <span class="label">Decision</span>
+        <strong>Diagrams are hand-authored SVG.</strong> A new
+        <code>references/svg-diagrams.md</code> covers layout patterns, the shared CSS
+        tokens, arrows/labels, and tagging nodes with <code>data-cmt-id</code> so
+        diagram elements stay individually commentable. The div-row diagram kit stays
+        for quick linear flows.
+      </div>
+    </section>
+
+    <section class="block" data-block-id="modes" data-block-label="Modes &amp; ceremony">
+      <h2>Modes — ceremony scales with the artifact</h2>
+      <p>The mode decides how much process an artifact gets. This is the fix for
+         "a 5-minute mockup pays the full plan ceremony".</p>
+      <table>
+        <thead><tr><th>Mode</th><th>Artifact</th><th>Review surface</th><th>Approval gate</th></tr></thead>
+        <tbody>
+          <tr><td><code>plan</code></td><td>implementation plan (today's template &amp; discipline, unchanged)</td><td>comments + question blocks</td><td><strong>yes</strong> — code starts only on approval</td></tr>
+          <tr><td><code>mockup</code></td><td>UI variants, clickable states, prototypes with real JS</td><td>comments + question blocks</td><td>no</td></tr>
+          <tr><td><code>decide</code></td><td>options matrix, trade-offs, recommendation</td><td>question blocks primary</td><td>optional</td></tr>
+          <tr><td><code>diagram</code></td><td>architecture / flow / sequence as SVG</td><td>comments (element pins)</td><td>no</td></tr>
+          <tr><td><code>doc</code></td><td>freeform — retro, research summary, runbook draft</td><td>comments</td><td>no</td></tr>
+        </tbody>
+      </table>
+      <p>An artifact opts out of the gate declaratively:
+         <code>&lt;body data-approval="off"&gt;</code> hides the Submit-review bar on
+         that page while keeping comments. A workspace mixes modes freely — e.g. a
+         plan page plus two mockup pages plus a diagram.</p>
+    </section>
+
+    <section class="block" data-block-id="architecture" data-block-label="Architecture">
+      <h2>Architecture</h2>
+      <div class="diagram">
+        <div class="lane">
+          <div class="lane-title">Workspace on disk — canvas/&lt;slug&gt;/</div>
+          <div class="row">
+            <div class="node" data-cmt-id="arch-pages" data-cmt-label="HTML artifacts"><div class="t">*.html artifacts</div><div class="s">plan.html · mockup-a.html · flow.html …</div></div>
+            <div class="node" data-cmt-id="arch-state" data-cmt-label="JSON state"><div class="t">JSON state</div><div class="s">comments · answers · approval · ack</div></div>
+            <div class="node"><div class="t">shared assets</div><div class="s">plan.css · comments.js · serve.py</div></div>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-title">serve.py (stdlib, 127.0.0.1)</div>
+          <div class="row">
+            <div class="node"><div class="t">static</div><div class="s">GET /&lt;page&gt;</div></div>
+            <div class="node" data-cmt-id="arch-api-pages" data-cmt-label="/api/pages"><div class="t">GET /api/pages</div><div class="s">lists *.html → nav</div></div>
+            <div class="node"><div class="t">review API</div><div class="s">comments (+page) · answers · approval · ack · version</div></div>
+            <div class="node" data-cmt-id="arch-wait" data-cmt-label="/api/wait"><div class="t">GET /api/wait</div><div class="s">long-poll · Condition · ~540s timeout</div></div>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-title">Two consumers</div>
+          <div class="row">
+            <div class="node"><div class="t">Browser</div><div class="s">tab nav · picker · polls /api/version to refresh</div></div>
+            <div class="arrow">·</div>
+            <div class="node" data-cmt-id="arch-watcher" data-cmt-label="Watcher"><div class="t">Watcher (background curl)</div><div class="s">blocks on /api/wait → exits on event → harness wakes Claude instantly</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="callout note"><span class="label">Note</span>
+        Wake latency becomes one HTTP response (~ms) instead of a poll interval.
+        On the ~540s idle timeout the watcher exits empty and Claude just relaunches
+        it — a cheap heartbeat.</div>
+    </section>
+
+    <section class="block" data-block-id="nav-wireframe" data-block-label="Workspace nav wireframe">
+      <h2>What the workspace looks like</h2>
+      <div class="wf-frame browser">
+        <div class="wf-chrome">
+          <strong>canvas/bastion-auth</strong>
+          <span class="wf-pill" data-cmt-id="wf-tab-plan">plan</span>
+          <span class="wf-pill" data-cmt-id="wf-tab-mockup">login-mockup</span>
+          <span class="wf-pill" data-cmt-id="wf-tab-flow">enroll-flow</span>
+          <span class="wf-spacer"></span>
+          <span class="wf-pill">mark</span>
+          <span class="wf-pill">Comments (3)</span>
+          <span class="wf-pill" data-cmt-id="wf-submit">Submit review</span>
+        </div>
+        <div class="wf-body">
+          <div class="wf-card"><strong>login-mockup.html</strong> — variant B, clickable
+            states via its own inline JS<br/><span class="wf-muted">Submit review hidden
+            here (data-approval="off"); comments and pins still work.</span></div>
+        </div>
+      </div>
+      <div class="wf-cap">One workspace, three artifacts; nav injected by comments.js from /api/pages. Review UI otherwise unchanged.</div>
+    </section>
+
+    <section class="block" data-block-id="changes" data-block-label="Key changes">
+      <h2>Key changes</h2>
+      <div class="file-tree">
+        <div><span class="add">+ plugins/canvas/.claude-plugin/plugin.json</span> — new base-plugin manifest (mirrors homelab's)</div>
+        <div><span class="add">+ plugins/canvas/skills/canvas/SKILL.md</span> — moved (<code>git mv</code>) from homelab's visual-plan, then rewritten: engine workflow + mode dispatch; description triggers on plans, mockups, decisions, diagrams</div>
+        <div><span class="mod">~ …/canvas/assets/serve.py</span> — <code>/api/pages</code>, <code>page</code> field on comments, <code>EventBus</code> + <code>/api/wait</code></div>
+        <div><span class="mod">~ …/canvas/assets/comments.js</span> — workspace tab nav, page-aware comment API, <code>data-approval="off"</code> support</div>
+        <div><span class="mod">~ …/canvas/assets/plan.css</span> — styles for the tab nav; everything else untouched</div>
+        <div><span class="mod">~ …/canvas/assets/template.html</span> — plan-mode template, unchanged structure</div>
+        <div><span class="add">+ …/canvas/assets/canvas.html</span> — minimal skeleton for mockup/decide/diagram/doc artifacts (inline CSS/JS welcome)</div>
+        <div><span class="add">+ …/canvas/references/modes.md</span> — per-mode when-to-use + ceremony (the table above, normative)</div>
+        <div><span class="add">+ …/canvas/references/svg-diagrams.md</span> — SVG authoring guidance</div>
+        <div><span class="mod">~ …/canvas/references/document-quality.md</span> — split framing: shared authoring bar vs plan-mode structure</div>
+        <div><span class="mod">~ …/canvas/references/wireframe.md</span> — becomes the mockup-mode reference; realism rules unchanged</div>
+        <div><span class="mod">~ …/canvas/tests/test_serve.py</span> — extended <strong>first</strong> (TDD): pages, page-keyed comments, wait semantics</div>
+        <div><span class="mod">~ plugins/homelab/</span> — <code>skills/visual-plan/</code> moves out; README updated</div>
+        <div><span class="mod">~ .claude-plugin/marketplace.json</span> — add <code>canvas</code> plugin entry (own <code>git-subdir</code> source + <code>sha</code> pin); bump homelab pin; drop "local visual planning" from homelab's description</div>
+      </div>
+
+      <h3>serve.py — the wake mechanism</h3>
+      <div class="annotated">
+        <pre>class EventBus:
+    def __init__(self):
+        self.seq, self.last = 0, None
+        self.cond = threading.Condition()
+    def notify(self, kind):
+        with self.cond:
+            self.seq += 1; self.last = kind
+            self.cond.notify_all()
+    def wait(self, since, timeout=540):
+        with self.cond:
+            self.cond.wait_for(lambda: self.seq > since, timeout)
+            fired = self.seq > since
+            return {"cursor": self.seq,
+                    "event": self.last if fired else None}</pre>
+        <div class="notes">
+          <div class="note-item"><span class="ln">L5</span> called from the POST handlers that should wake Claude — which ones is open question <em>q-wake</em> below</div>
+          <div class="note-item"><span class="ln">L9</span> <code>GET /api/wait?since=N</code> blocks here; ThreadingHTTPServer gives each waiter its own thread — fine for 1–2 local clients</div>
+          <div class="note-item"><span class="ln">L11</span> timeout returns <code>event: null</code>; the watcher exits either way and Claude relaunches it</div>
+        </div>
+      </div>
+
+      <h3>comments.json — page-keyed records</h3>
+      <div class="annotated">
+        <pre>comment = {
+    ...,                       # id, blockId, quote, anchor, target — unchanged
+    "page": fields.get("page", "plan.html"),
+}</pre>
+        <div class="notes">
+          <div class="note-item"><span class="ln">L3</span> default keeps every existing stored plan working with the new assets, unmodified</div>
+        </div>
+      </div>
+
+      <h3>canvas.html — the non-plan skeleton</h3>
+      <div class="annotated">
+        <pre>&lt;link rel="stylesheet" href="plan.css"/&gt;
+&lt;style&gt; /* artifact-specific styles */ &lt;/style&gt;
+&lt;body data-approval="off"&gt;
+  &lt;main class="plan"&gt;
+    &lt;section class="block" data-block-id="…"&gt;…&lt;/section&gt;
+  &lt;/main&gt;
+  &lt;script src="comments.js"&gt;&lt;/script&gt;
+  &lt;script&gt; /* artifact-specific JS */ &lt;/script&gt;</pre>
+        <div class="notes">
+          <div class="note-item"><span class="ln">L1</span> shared base first — tokens and review-UI styling stay consistent</div>
+          <div class="note-item"><span class="ln">L3</span> non-plan modes ship without the approval bar by default</div>
+          <div class="note-item"><span class="ln">L7</span> invariant 1: comments.js always loaded</div>
+          <div class="note-item"><span class="ln">L8</span> artifact JS loads after comments.js and must not remove anchored elements</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="verification" data-block-label="Verification &amp; rollout">
+      <h2>Verification &amp; rollout</h2>
+      <p><strong>Tests first (TDD).</strong> Extend <code>tests/test_serve.py</code>
+         before touching <code>serve.py</code>: <code>/api/pages</code> lists artifacts;
+         comments round-trip a <code>page</code> field and default it when absent;
+         <code>/api/wait</code> blocks until a qualifying POST fires it from another
+         thread, returns <code>event: null</code> on timeout, and ignores
+         non-qualifying events. Watch them fail, then implement.</p>
+      <p><strong>End-to-end check</strong> (the real workflow, not just unit tests):
+         build a demo workspace with a plan page, an interactive mockup page (inline
+         JS state), and an SVG diagram page; serve it; post a comment and a submit
+         from the browser; confirm the background watcher exits within ~1s and the ack
+         lands; confirm an old stored plan folder still serves correctly with the new
+         assets.</p>
+      <p><strong>Rollout:</strong> commit to <code>vasusheoran/claude-plugins</code> on a
+         branch → merge to main → in <code>.claude-plugin/marketplace.json</code>, add
+         the <code>canvas</code> entry and bump both <code>sha</code> pins → install the
+         new plugin (<code>canvas@vasusheoran-plugins</code>) and update homelab so its
+         cache copy under <code>~/.claude/plugins/cache/</code> drops visual-plan.
+         Archive this plan as a dated snapshot in the repo once shipped.</p>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong>Stale cache.</strong> The live skill runs from the plugin cache, not the
+        marketplace clone — forgetting the sha bump + update means testing the old
+        skill. The rollout step above is explicit in the plan for exactly this reason.</div>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong>Artifact JS vs review UI.</strong> A prototype's script could clobber
+        DOM that comments anchor to. Mitigation: the two invariants in
+        <code>modes.md</code>, and the pre-handoff self-check gains "open each page,
+        add a test pin, confirm it survives interaction".</div>
+      <div class="callout risk"><span class="label">Risk</span>
+        <strong>Anchor drift across pages.</strong> Multi-page workspaces multiply the
+        brittle-CSS-path case for untagged elements. Mitigation unchanged in kind:
+        tag discussion-worthy elements with <code>data-cmt-id</code>; comments falling
+        back to block level is the existing, acceptable degradation.</div>
+    </section>
+
+    <section class="block" data-block-id="open-questions" data-block-label="Open questions">
+      <h2>Open questions</h2>
+      <p>Two decisions are genuinely open — answer inline below; each has a
+         recommended default so silence + approval also works. (The skill's name and
+         home are settled: standalone <code>canvas</code> plugin, same repo.)</p>
+    </section>
+
+    <section class="block question" data-block-id="q-wake"
+             data-block-label="What wakes Claude?"
+             data-question-id="wake" data-question-mode="single">
+      <h3>Which events fire <code>/api/wait</code> and wake Claude instantly?</h3>
+      <div class="qopt" data-value="submit-and-agent">Submit review + each <em>Submit</em>-to-Claude comment (recommended — instant on anything addressed to Claude; plain notes and half-typed reviews don't cause churn)</div>
+      <div class="qopt" data-value="submit-only">Submit review only (quietest; individual comments wait for the batch)</div>
+      <div class="qopt" data-value="everything">Every event, including notes and question answers (most reactive; Claude may respond while you're still mid-review)</div>
+    </section>
+
+    <section class="block question" data-block-id="q-assets"
+             data-block-label="Copy or share assets?"
+             data-question-id="assets" data-question-mode="single">
+      <h3>Should each workspace keep its own copy of the assets?</h3>
+      <div class="qopt" data-value="copy">Copy per workspace, as today (recommended — every workspace is a self-contained snapshot that renders identically forever, matching the dated-snapshot docs policy)</div>
+      <div class="qopt" data-value="shared">Serve shared assets from the skill dir (asset fixes propagate to old workspaces, but archived artifacts can change appearance after upgrades)</div>
+    </section>
+
+    <p class="wf-muted" style="font-size:13px">
+      Tip: hover any section and click 💬 to comment, select text to quote it, use
+      <strong>mark</strong> to pin an element, or <strong>Alt-click</strong> any point.
+      Submit review from the bottom bar when done.
+    </p>
+
+  </main>
+  <script src="comments.js"></script>
+</body>
+</html>

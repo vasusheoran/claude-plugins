@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "homelab",
-      "description": "Homelab management plugin — Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, statusline setup, and local visual planning.",
+      "description": "Homelab management plugin — Proxmox, self-hosted services, Cloudflare tunnels. Commands for session handoffs, ops docs, behavioral guidelines, and statusline setup.",
       "author": {
         "name": "Vasu Sheoran"
       },
@@ -19,9 +19,25 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/homelab",
         "ref": "main",
-        "sha": "77660518a110431aa2111aabe57e1e639c9d1d2b"
+        "sha": "a546a80261244e44b096589608d13800b9a3293d"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/homelab"
+    },
+    {
+      "name": "canvas",
+      "description": "Local canvas for Claude Code — plans, UI mockups, decision docs, and diagrams as reviewable HTML workspaces with inline comments and a push review loop. Stdlib-only, localhost-only.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/vasusheoran/claude-plugins.git",
+        "path": "plugins/canvas",
+        "ref": "main",
+        "sha": "a546a80261244e44b096589608d13800b9a3293d"
+      },
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
     }
   ]
 }
