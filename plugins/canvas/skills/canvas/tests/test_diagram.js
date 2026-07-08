@@ -122,6 +122,44 @@ test("sequence: message anchors only when the spec declares an id", () => {
   assert.strictEqual(anchored, 2, "id-less message must not synthesize an anchor");
 });
 
+test("sequence: every coordinate stays inside the viewBox (no clipping)", () => {
+  // Regression: real-world labels ("Canvas server", long message labels) must
+  // never push geometry to negative coordinates or past the viewBox edge.
+  const s = {
+    type: "sequence",
+    participants: [
+      { id: "p-r", label: "Reviewer" },
+      { id: "p-cs", label: "Canvas server" },
+      { id: "p-sc", label: "sidecar.json" },
+    ],
+    messages: [
+      { id: "m-1", from: "p-r", to: "p-cs", label: "POST /comment {anchor, body}" },
+      { from: "p-cs", to: "p-sc", label: "append comment" },
+    ],
+  };
+  const svg = render(s);
+  const [, w, h] = svg.match(/viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/).map(Number);
+  for (const m of svg.matchAll(/\b(x|x1|x2|y|y1|y2)="(-?\d+(?:\.\d+)?)"/g)) {
+    const val = parseFloat(m[2]);
+    assert.ok(val >= 0, m[1] + '="' + m[2] + '" is negative — clipped');
+    assert.ok(val <= (m[1][0] === "x" ? w : h),
+      m[1] + '="' + m[2] + '" exceeds the viewBox (' + w + "x" + h + ")");
+  }
+});
+
+test("sequence: layout widens for long labels instead of overlapping", () => {
+  const base = {
+    type: "sequence",
+    participants: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+    messages: [{ from: "a", to: "b", label: "hi" }],
+  };
+  const long = JSON.parse(JSON.stringify(base));
+  long.messages[0].label = "a genuinely long message label that must fit between lifelines";
+  const w = (svg) => Number(svg.match(/viewBox="0 0 (\d+(?:\.\d+)?)/)[1]);
+  assert.ok(w(render(long)) > w(render(base)),
+    "viewBox width must grow with the widest message label");
+});
+
 test("sequence: unknown participant reference throws", () => {
   const s = clone(SEQ);
   s.messages.push({ from: "p-a", to: "p-nope", label: "x" });
