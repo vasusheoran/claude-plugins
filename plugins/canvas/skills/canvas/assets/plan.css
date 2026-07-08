@@ -206,12 +206,20 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
 .cmt-panel.open { transform: translateX(0); }
 .cmt-panel header { padding: 14px 16px; border-bottom: 1px solid var(--line);
   display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.cmt-panel-filter { padding: 8px 12px; border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--muted); }
+.cmt-allpages { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.cmt-allpages input { margin: 0; cursor: pointer; }
 .cmt-panel .list { overflow-y: auto; flex: 1; padding: 8px; }
 .cmt-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   margin-bottom: 8px; font-size: 13px; cursor: pointer; }
 .cmt-item .where { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--accent); margin-bottom: 4px; }
 .cmt-item .meta { font-size: 11px; color: var(--muted); margin-top: 6px; }
+/* page badge shown on foreign comments while "all pages" is on */
+.cmt-page-tag { font-family: var(--mono); font-size: 10px; color: var(--muted);
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 5px; text-transform: none; letter-spacing: 0; }
 .cmt-item.resolved { opacity: 0.55; }
 .cmt-item.resolved .where { color: var(--resolved); text-decoration: line-through; }
 .cmt-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px;
@@ -251,6 +259,17 @@ body { padding-top: 46px; }                  /* clear the fixed nav */
   background: #e9edf3; border-bottom: 1px solid var(--line-strong);
   box-shadow: 0 1px 4px rgba(0,0,0,0.06); font-size: 13px; }
 .cmt-nav-spacer { flex: 1; }
+
+/* workspace tabs (multi-page): scroll horizontally on narrow windows */
+.cmt-tabs { display: flex; align-items: center; gap: 4px; min-width: 0;
+  max-width: 44%; overflow-x: auto; margin-right: 4px; padding-right: 6px;
+  border-right: 1px solid var(--line-strong); scrollbar-width: thin; }
+.cmt-tab { flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  border: 1px solid var(--line-strong); border-radius: 7px; padding: 5px 10px;
+  font-size: 13px; line-height: 1; background: var(--bg); }
+.cmt-tab:hover { border-color: var(--accent); color: var(--ink); }
+.cmt-tab.current { color: #fff; background: var(--accent); border-color: var(--accent); }
 .cmt-nav-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink);
   border-radius: 7px; padding: 6px 12px; font-size: 13px; line-height: 1; }

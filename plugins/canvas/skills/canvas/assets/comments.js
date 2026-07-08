@@ -17,8 +17,26 @@
 
   var hasServer = location.protocol.startsWith("http");
   var LS = "visual-plan::" + location.pathname;
-  var state = { comments: [], answers: [], approval: { state: null, note: "" }, ack: {} };
+  var state = { comments: [], answers: [], approval: { state: null, note: "" }, ack: {}, pages: [] };
   var version = {};
+
+  // Current HTML artifact: basename of the path, with "/" meaning plan.html.
+  // Comments carry a "page" field; legacy comments (no page) count as plan.html.
+  var DEFAULT_PAGE = "plan.html";
+  var curPage = (function () {
+    var p = (location.pathname || "/").split("/").pop();
+    return p || DEFAULT_PAGE;
+  })();
+  function pageOf(c) { return c.page || DEFAULT_PAGE; }
+
+  // When on, the review panel/nav counts show comments from every page, not
+  // just the current one. Off by default so a page reviews only itself.
+  var showAllPages = false;
+
+  // Pages may opt out of the approval gate with <body data-approval="off">.
+  function approvalOff() {
+    return !!(document.body && document.body.getAttribute("data-approval") === "off");
+  }
 
   /* ----------------------------- storage ----------------------------- */
 
@@ -47,6 +65,10 @@
       jget("/api/approval").then(function (d) { state.approval = d; }),
       jget("/api/ack").then(function (d) { state.ack = d || {}; }),
       jget("/api/version").then(function (d) { version = d; }),
+      // Multi-page workspace: tabs only appear for 2+ pages; a failure (e.g.
+      // an older server) leaves pages empty so the nav is unchanged.
+      jget("/api/pages").then(function (d) { state.pages = (d && d.pages) || []; })
+        .catch(function () { state.pages = []; }),
     ]);
   }
 
@@ -57,7 +79,7 @@
     var c = Object.assign({
       id: "c-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       parentId: null, status: "open", target: "agent", author: "human",
-      anchor: null, quote: null, createdAt: new Date().toISOString(),
+      anchor: null, quote: null, page: DEFAULT_PAGE, createdAt: new Date().toISOString(),
     }, fields);
     state.comments.push(c); lsSave(); return Promise.resolve(c);
   }
@@ -93,8 +115,17 @@
 
   function byId(id) { return state.comments.filter(function (c) { return c.id === id; })[0]; }
   function blockEl(id) { return document.querySelector('[data-block-id="' + id + '"]'); }
+
+  // Belongs on this page? Anchors (pins/quotes/targets) always scope to curPage
+  // because the DOM they attach to is this page; the panel/nav honor the
+  // "all pages" toggle.
+  function onCurPage(c) { return pageOf(c) === curPage; }
+  function inView(c) { return showAllPages || onCurPage(c); }
+
   function openCount() {
-    return state.comments.filter(function (c) { return c.status !== "resolved"; }).length;
+    return state.comments.filter(function (c) {
+      return c.status !== "resolved" && inView(c);
+    }).length;
   }
   function repliesOf(id) {
     return state.comments.filter(function (c) { return c.parentId === id; });
@@ -200,7 +231,7 @@
       el.classList.remove("cmt-target");
     });
     state.comments.forEach(function (c) {
-      if (!c.componentId || c.parentId != null) return;
+      if (!c.componentId || c.parentId != null || !onCurPage(c)) return;
       var el = resolveComponent(c.componentId);
       if (el) el.classList.toggle("cmt-target", c.status !== "resolved");
     });
@@ -221,7 +252,7 @@
       }
       var id = el.getAttribute("data-block-id");
       var has = state.comments.some(function (c) {
-        return c.blockId === id && c.parentId == null && c.status !== "resolved";
+        return c.blockId === id && c.parentId == null && c.status !== "resolved" && onCurPage(c);
       });
       el.classList.toggle("has-comments", has);
     });
@@ -246,7 +277,7 @@
   function renderPins() {
     document.querySelectorAll(".cmt-pin").forEach(function (p) { p.remove(); });
     state.comments.forEach(function (c, i) {
-      if (!c.anchor || c.parentId != null) return;
+      if (!c.anchor || c.parentId != null || !onCurPage(c)) return;
       var el = blockEl(c.blockId); if (!el) return;
       var pin = document.createElement("button");
       pin.className = "cmt-pin" + (c.status === "resolved" ? " resolved" : "");
@@ -264,7 +295,7 @@
   // Best-effort: wrap a quoted selection in <mark> when it sits in one text node.
   function highlightQuotes() {
     state.comments.forEach(function (c) {
-      if (!c.quote || c.anchor || c.parentId != null) return;
+      if (!c.quote || c.anchor || c.parentId != null || !onCurPage(c)) return;
       var el = blockEl(c.blockId); if (!el || el.querySelector('mark[data-q="' + c.id + '"]')) return;
       var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
       var node;
@@ -345,7 +376,7 @@
         blockId: blockId, blockLabel: blockLabel,
         componentId: componentId, componentLabel: componentLabel,
         quote: quote || null, anchor: anchor || null,
-        target: target, body: body,
+        target: target, body: body, page: curPage,
       }).then(refreshAll);
     }
     box.querySelector(".add").addEventListener("click", function () { save("human"); });
@@ -437,8 +468,11 @@
     var resolved = c.status === "resolved";
     var replies = repliesOf(c.id);
     var isAgent = (c.target || "agent") === "agent";
+    // When viewing all pages, badge comments that live on a different page.
+    var foreign = showAllPages && !onCurPage(c);
     return '<div class="cmt-item ' + (resolved ? "resolved" : "") + '" data-cid="' + c.id + '">' +
       '<div class="where"><span class="cmt-status-dot"></span>' +
+      (foreign ? '<span class="cmt-page-tag">' + escapeHtml(pageOf(c)) + "</span> " : "") +
       escapeHtml(c.blockLabel || c.blockId) +
       (c.componentLabel ? " › " + escapeHtml(c.componentLabel) : "") +
       (c.componentId ? " · ◉" : c.anchor ? " · 📍" : c.quote ? " · ❝" : "") + "</div>" +
@@ -462,19 +496,33 @@
     var p = document.getElementById("cmt-panel") || document.createElement("aside");
     p.id = "cmt-panel";
     p.className = "cmt-panel" + (p.classList.contains("open") ? " open" : "");
-    var tops = state.comments.filter(function (c) { return c.parentId == null; });
+    var tops = state.comments.filter(function (c) {
+      return c.parentId == null && inView(c);
+    });
     var items = tops.map(commentNode).join("") ||
       '<p style="padding:16px;color:#6b7280">No comments yet. Hover a section and click 💬, ' +
       'select text to quote it, Alt-click to pin a point, or click <b>mark</b> then any element.</p>';
+    // "All pages" toggle appears only in a multi-page workspace.
+    var multiPage = (state.pages || []).length > 1;
+    var toggle = multiPage
+      ? '<label class="cmt-allpages"><input type="checkbox" id="cmt-allpages"' +
+        (showAllPages ? " checked" : "") + "> all pages</label>"
+      : "";
     p.innerHTML =
       "<header><span>Review · " + openCount() + " open</span>" +
       '<button class="cmt-btn" id="cmt-close">Close</button></header>' +
+      (toggle ? '<div class="cmt-panel-filter">' + toggle + "</div>" : "") +
       '<div class="list">' + items + "</div>" +
       (hasServer ? "" :
         '<div class="cmt-export-note">Offline (file://) — saved in this browser only. ' +
         '<button class="cmt-btn" id="cmt-export">Copy feedback JSON</button></div>');
     if (!p.parentNode) document.body.appendChild(p);
     p.querySelector("#cmt-close").onclick = function () { p.classList.remove("open"); };
+    var allBox = p.querySelector("#cmt-allpages");
+    if (allBox) allBox.onchange = function () {
+      showAllPages = allBox.checked;
+      renderPanel(); renderNav();
+    };
     p.querySelectorAll(".cmt-item").forEach(function (it) {
       var cid = it.getAttribute("data-cid");
       it.querySelector(".toggle").onclick = function (e) {
@@ -511,7 +559,7 @@
       var body = ta.value.trim(); if (!body) return;
       var parent = byId(parentId);
       addComment({ blockId: parent.blockId, blockLabel: parent.blockLabel,
-        parentId: parentId, body: body }).then(refreshAll);
+        parentId: parentId, body: body, page: pageOf(parent) }).then(refreshAll);
     };
   }
 
@@ -524,6 +572,9 @@
   /* --------------------------- approval gate ------------------------- */
 
   // Open top-level comments addressed to Claude — the implicit "change requests".
+  // Deliberately workspace-wide (NOT filtered by page): the approval decision
+  // derived from it gates the whole workspace, so a Submit-to-Claude comment on
+  // another tab must still turn a Submit review into changes-requested.
   function openAgentCount() {
     return state.comments.filter(function (c) {
       return c.parentId == null && c.status !== "resolved" &&
@@ -538,6 +589,20 @@
       '<path d="M8 1.4a4.2 4.2 0 0 0-4.2 4.2c0 3 4.2 8.8 4.2 8.8s4.2-5.8 4.2-8.8' +
       'A4.2 4.2 0 0 0 8 1.4Z" fill="currentColor"/>' +
       '<circle cx="8" cy="5.6" r="1.6" fill="#fff"/></svg>';
+  }
+
+  // Workspace tabs: one per HTML artifact, current page highlighted. Rendered
+  // only for 2+ pages; empty (no tabs, unchanged nav) otherwise or in file://.
+  function tabsHtml() {
+    var pages = state.pages || [];
+    if (pages.length < 2) return "";
+    var tabs = pages.map(function (pg) {
+      var current = pg.file === curPage;
+      return '<a class="cmt-tab' + (current ? " current" : "") + '" href="/' +
+        escapeHtml(pg.file) + '"' + (current ? ' aria-current="page"' : "") + '>' +
+        escapeHtml(pg.title || pg.file) + "</a>";
+    }).join("");
+    return '<nav class="cmt-tabs">' + tabs + "</nav>";
   }
 
   function renderNav() {
@@ -562,25 +627,33 @@
         ? "✓ acknowledged by " + escapeHtml(ack.by || "Claude") +
           (ack.message ? " — " + escapeHtml(ack.message) : "")
         : "submitted · awaiting Claude…";
+    // Pages with data-approval="off" drop the whole approval gate (status,
+    // hint, note, submit); mark picker and comments stay unchanged.
+    var apprHtml = approvalOff() ? "" :
+      statusHtml + '<span class="appr-hint' + (acked ? " acked" : "") + '">' + hint + "</span>" +
+      '<input class="appr-note" placeholder="note (optional)" value="' +
+        escapeHtml((state.approval && state.approval.note) || "") + '">' +
+      '<button class="cmt-btn primary submit-review">Submit review</button>';
     nav.innerHTML =
+      tabsHtml() +
       '<button class="cmt-nav-btn mark' + (pickMode ? " active" : "") + '" id="cmt-mark" ' +
         'title="mark" aria-label="mark">' + markIcon() + "</button>" +
       '<button class="cmt-nav-btn" id="cmt-comments">Comments ' +
         '<span class="count">' + openCount() + "</span></button>" +
       '<span class="cmt-nav-spacer"></span>' +
-      statusHtml + '<span class="appr-hint' + (acked ? " acked" : "") + '">' + hint + "</span>" +
-      '<input class="appr-note" placeholder="note (optional)" value="' +
-        escapeHtml((state.approval && state.approval.note) || "") + '">' +
-      '<button class="cmt-btn primary submit-review">Submit review</button>';
+      apprHtml;
     if (!nav.parentNode) document.body.appendChild(nav);
     nav.querySelector("#cmt-mark").onclick = function () { setPickMode(!pickMode); };
     nav.querySelector("#cmt-comments").onclick = function () {
       var p = document.getElementById("cmt-panel"); if (p) p.classList.toggle("open");
     };
-    var note = function () { return nav.querySelector(".appr-note").value.trim(); };
-    nav.querySelector(".submit-review").onclick = function () {
-      setApproval(pending ? "changes-requested" : "approved", note()).then(refreshAll);
-    };
+    var submitBtn = nav.querySelector(".submit-review");
+    if (submitBtn) {
+      var note = function () { return nav.querySelector(".appr-note").value.trim(); };
+      submitBtn.onclick = function () {
+        setApproval(pending ? "changes-requested" : "approved", note()).then(refreshAll);
+      };
+    }
   }
 
   function renderAll() {
