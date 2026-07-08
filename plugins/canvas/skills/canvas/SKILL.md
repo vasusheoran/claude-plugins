@@ -42,10 +42,14 @@ workspace holds many artifacts, all served as tabs.
 ```bash
 ASSETS=<this-skill-dir>/assets
 mkdir -p canvas/<slug>
-cp "$ASSETS"/{serve.py,plan.css,comments.js} canvas/<slug>/
+cp "$ASSETS"/{serve.py,plan.css,comments.js,diagram.js} canvas/<slug>/
 cp "$ASSETS"/template.html canvas/<slug>/plan.html   # plan mode
 cp "$ASSETS"/canvas.html   canvas/<slug>/mockup-a.html   # any other artifact
 ```
+
+`diagram.js` renders sequence/flow diagrams from JSON specs; copy it alongside
+the others and, in any artifact that uses a diagram spec, load it with
+`<script src="diagram.js">` (after `comments.js`). See `references/svg-diagrams.md`.
 
 ## Authoring
 
@@ -61,6 +65,9 @@ Author each artifact from its template. Rules (full detail in
   keep `comments.js` loaded on every artifact; (2) your JS must not remove or
   renumber anchored elements (`data-block-id`/`data-cmt-id`) or their comments
   detach. `plan.css` stays the shared base — link it first.
+- **Diagrams.** Pick the form from the chooser in `references/svg-diagrams.md` —
+  sequence/flow via a `diagram.js` JSON spec, freeform architecture via hand SVG,
+  a linear chain via the div kit.
 - **Gate.** Non-plan artifacts declare `<body data-approval="off">` (already in
   `canvas.html`). Plan pages carry the gate — leave it off, or remove
   `data-approval="off"` if you started from `canvas.html`.
@@ -135,12 +142,12 @@ in the panel and paste it back, then apply it the same way.
 
 ## Notes
 
-- **No dependencies.** `serve.py`, `plan.css`, `comments.js` are
+- **No dependencies.** `serve.py`, `plan.css`, `comments.js`, `diagram.js` are
   stdlib/vanilla only. Anything with `python3` and a browser runs this.
 - **Localhost-only** bind (`127.0.0.1`). Nothing leaves the machine.
 - **Fix shared assets, not one workspace.** If look/structure/behavior is wrong,
-  fix `plan.css` / `comments.js` / the templates / the reference docs — don't
-  hand-patch one stored artifact. Turn feedback into better guidance.
+  fix `plan.css` / `comments.js` / `diagram.js` / the templates / the reference
+  docs — don't hand-patch one stored artifact. Turn feedback into better guidance.
 - **Gitignore state files** (`comments.json`, `answers.json`, `approval.json`,
   `ack.json`) if checking a workspace into the repo — they're review state, not
   the artifact.

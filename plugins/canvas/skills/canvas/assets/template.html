@@ -11,7 +11,9 @@
      references/document-quality.md). Inline CSS/JS is allowed when the plan
      genuinely needs it — two invariants: keep comments.js loaded (below) and
      don't remove/renumber anchored elements (data-block-id / data-cmt-id).
-   - Keep plan.css / comments.js as sibling files (linked below).
+   - Keep plan.css / comments.js as sibling files (linked below). diagram.js is
+     also copied into the workspace; load it after comments.js only if this plan
+     uses a <script type="application/json" data-diagram> spec.
    - For non-plan artifacts (mockup / decide / diagram / doc) start from
      canvas.html instead — same folder, its own tab, no gate.
 -->
@@ -101,12 +103,17 @@
     </section>
 
     <p class="wf-muted" style="font-size:13px">
-      Tip: hover any section and click 💬 to comment, select text to quote it, or
-      <strong>Alt-click</strong> any point (e.g. on a diagram/wireframe) to pin a
-      comment there. Reviewers approve or request changes from the bottom bar.
+      Tip: click <strong>💬 Comment</strong> in the nav — or press <strong>C</strong> —
+      then click an element to attach a comment, <strong>Alt-click</strong> any
+      point (e.g. on a diagram/wireframe) to pin one, or select text to quote it.
+      Press <strong>Esc</strong> to leave commenting. Reviewers approve or request
+      changes from the bottom bar.
     </p>
 
   </main>
   <script src="comments.js"></script>
+  <!-- Uncomment when a diagram spec (<script type="application/json" data-diagram>)
+       is used above; must load after comments.js: -->
+  <!-- <script src="diagram.js"></script> -->
 </body>
 </html>

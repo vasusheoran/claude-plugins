@@ -17,7 +17,13 @@
    - <body data-approval="off"> means no approval gate (correct for
      mockup/diagram/doc). If this artifact should carry the gate (a decide page
      you want signed off, or a plan-like page), remove data-approval="off".
-   - Keep plan.css / comments.js as sibling files (linked below).
+   - Keep plan.css / comments.js as sibling files (linked below). diagram.js is
+     also copied into the workspace — uncomment its <script> below to render
+     sequence/flow diagrams from a <script type="application/json" data-diagram>
+     spec (see references/svg-diagrams.md for the chooser and spec shapes).
+   - To comment: click 💬 Comment in the nav (or press C) then click an element,
+     Alt-click a point, or select text; Esc exits. The review UI only listens
+     while Comment mode is on, so interactive prototypes here are safe to click.
 -->
 <html lang="en">
 <head>
@@ -50,8 +56,31 @@
          interactive markup for this page.</p>
     </section>
 
+    <!-- Diagram spec example (diagram mode). Uncomment this block AND the
+         diagram.js <script> below; diagram.js replaces it with rendered SVG.
+         Two participants + one message; see references/svg-diagrams.md.
+    <section class="block" data-block-id="flow" data-block-label="Sequence">
+      <h2>Sequence</h2>
+      <script type="application/json" data-diagram>
+        {
+          "type": "sequence",
+          "participants": [
+            { "id": "p-browser", "label": "Browser" },
+            { "id": "p-serve", "label": "serve.py" }
+          ],
+          "messages": [
+            { "id": "m-post", "from": "p-browser", "to": "p-serve", "label": "POST /api/comments" },
+            { "from": "p-serve", "to": "p-browser", "label": "ok", "style": "return" }
+          ]
+        }
+      </script>
+    </section>
+    -->
+
   </main>
   <script src="comments.js"></script>
+  <!-- Uncomment when using diagram specs (must load after comments.js): -->
+  <!-- <script src="diagram.js"></script> -->
   <script>
     /* Artifact JS — inline behavior for this page only (clickable states,
        variant toggles, prototype logic). Must not remove elements that carry

@@ -30,7 +30,7 @@ Building blocks:
 | Settled choice | `<div class="callout decision"><span class="label">Decision</span> …</div>` |
 | Risk / warning | `<div class="callout risk"><span class="label">Risk</span> …</div>` |
 | Side note | `<div class="callout note"><span class="label">Note</span> …</div>` |
-| Architecture / data flow | `<div class="diagram">` with `.row`, `.node` (`.t` title, `.s` subtitle), `.arrow`, `.lane`/`.lane-title`; or inline SVG — see `references/svg-diagrams.md` |
+| Architecture / data flow / sequence | Pick the form from the chooser in `references/svg-diagrams.md` — `diagram.js` spec (sequence/flow), hand SVG (freeform), or the `<div class="diagram">` kit (`.row`, `.node` with `.t`/`.s`, `.arrow`, `.lane`/`.lane-title`) for a linear chain |
 | Files touched | `<div class="file-tree">` with `.add` (new) / `.mod` (changed) spans |
 | Code that needs explaining | `<div class="annotated"><pre>…</pre><div class="notes"><div class="note-item"><span class="ln">L3</span> …</div></div></div>` |
 | Plain throwaway snippet | `<pre>…</pre>` or inline `<code>` |
@@ -47,18 +47,31 @@ every artifact: keep `comments.js` loaded, and don't remove or renumber elements
 that carry `data-block-id`/`data-cmt-id` — your JS must not destroy them or their
 comments detach.
 
-## Component-level comments (the "mark" picker)
+## Component-level comments (Comment mode)
 
-The top nav carries the whole review UI — **mark · Comments · Submit review** —
-so you don't author any comment affordances. Clicking **mark** turns the cursor
-into an element picker (inspector-style): hovering highlights whatever element is
-under it, and a click anchors a comment to that exact element, outlined like a
-Figma/Vercel preview pin. **Any element is pickable** — you don't have to tag
-anything.
+The top nav carries the whole review UI, and **Comment mode is the one entry
+point for creating a comment** — you author no comment affordances. The reviewer
+enters it with the nav **💬 Comment** button or by pressing **C**; **Esc** exits.
+The mode is **sticky** — it stays on until Esc, so a reviewer can drop several
+comments in a row. While it's on, the cursor is an inspector-style picker and how
+you interact decides what the comment anchors to:
 
-Tagging is only about anchor stability. Give an element a stable `data-cmt-id`
-(+ optional `data-cmt-label`) when you want a comment on it to survive your later
-edits:
+- **Click** an element → an **element anchor** (snaps to the nearest
+  `data-cmt-id`, else a generated path), outlined like a Figma/Vercel pin.
+- **Alt-click** any point → a **point pin** at those `{x,y}` coords (e.g. on a
+  diagram or wireframe).
+- **Select text** → a **quote** anchored to the selection.
+
+With the mode **off**, the review UI touches no artifact events at all — which is
+why interactive mockups are safe to click through without triggering the picker.
+A block with open comments shows a small clickable **count chip** (top-right) that
+jumps to its thread in the panel; that's display/navigation, not a creation
+affordance. If a prototype needs the **C** key for its own behavior, opt out with
+`<body data-comment-key="off">` (the button still works).
+
+**Any element is pickable** — you don't have to tag anything. Tagging is only
+about anchor stability. Give an element a stable `data-cmt-id` (+ optional
+`data-cmt-label`) when you want a comment on it to survive your later edits:
 
 ```html
 <div class="node" data-cmt-id="flow-ratelimit" data-cmt-label="Rate-limit mw">…</div>
