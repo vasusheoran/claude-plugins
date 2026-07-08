@@ -1,9 +1,9 @@
-# Wireframe quality
+# Wireframe / mockup quality
 
-Read before authoring any UI screen. Adapted from agent-native `/visual-plan`'s
-wireframe bar, retargeted at hand-authored HTML/CSS using the `wf-*` classes in
-`assets/plan.css`. Author wireframes only for UI/product plans — skip them for
-architecture, backend, data, or copy-only plans.
+The reference for the **mockup** mode, and for any UI screen inside a plan. Read
+before authoring one. Uses hand-authored HTML/CSS with the `wf-*` classes in
+`assets/plan.css`. Author screens for UI/product work only — skip them for
+architecture, backend, data, or copy-only artifacts.
 
 ## Realism
 
@@ -48,6 +48,22 @@ architecture, backend, data, or copy-only plans.
   arrows, data contracts, or callout prose inside the screen. Put those in the
   document body or a separate `diagram` block.
 - Don't show desktop *and* mobile unless responsive behavior actually differs.
+
+## Interactive mockups
+
+Mockups may be interactive — inline `<style>`/`<script>` for clickable states,
+tab switches, and variant toggles is allowed and encouraged when it makes the
+review sharper than a static frame.
+
+- **Real content in every state.** A toggled-on state, an open menu, a filled
+  form must all show plausible product content — not empty shells.
+- **Two invariants still hold.** Keep `comments.js` loaded, and don't let your
+  script remove or renumber elements carrying `data-block-id`/`data-cmt-id` — a
+  destroyed anchor drops its comments.
+- **Model hidden states as separate frames.** If interaction would hide a
+  secondary state from a reviewer who doesn't click it (an error, a loading
+  spinner, a rare edge state), render that state as its own `wf-frame` so it
+  stays reviewable, rather than burying it behind a click.
 
 ## Before/after
 

@@ -1,18 +1,25 @@
 <!DOCTYPE html>
 <!--
-  visual-plan scaffold. Copy to plans/<slug>/plan.html and replace the content.
+  canvas plan-mode scaffold. Copy to canvas/<slug>/plan.html and replace the
+  content. This is the plan mode — it carries the approval gate.
   Rules:
    - Every reviewable section is <section class="block" data-block-id="..."
-     data-block-label="...">  so it can be commented on.
-   - data-block-id must be unique and stable (don't renumber on edits).
+     data-block-label="">  so it can be commented on.
+   - data-block-id must be unique and stable (don't renumber on edits) — comments
+     anchor to it.
+   - Prefer the shared vocabulary (plan.css classes, the building blocks in
+     references/document-quality.md). Inline CSS/JS is allowed when the plan
+     genuinely needs it — two invariants: keep comments.js loaded (below) and
+     don't remove/renumber anchored elements (data-block-id / data-cmt-id).
    - Keep plan.css / comments.js as sibling files (linked below).
-   - This file is content only — never put CSS/JS inline; edit the shared assets.
+   - For non-plan artifacts (mockup / decide / diagram / doc) start from
+     canvas.html instead — same folder, its own tab, no gate.
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PLAN TITLE — Visual Plan</title>
+  <title>PLAN TITLE — Canvas</title>
   <link rel="stylesheet" href="plan.css" />
 </head>
 <body>
