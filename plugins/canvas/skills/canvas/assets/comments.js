@@ -325,10 +325,12 @@
   function numberAnnotated() {
     document.querySelectorAll(".annotated pre:not(.numbered)").forEach(function (pre) {
       var lines = pre.textContent.replace(/\n$/, "").split("\n");
+      // join with "" — the grid rows already stack; a literal \n between them
+      // would render as an extra blank line inside the <pre>
       pre.innerHTML = lines.map(function (line, i) {
         return '<span class="ln-row"><span class="num">' + (i + 1) + "</span>" +
           "<span>" + escapeHtml(line) + "</span></span>";
-      }).join("\n");
+      }).join("");
       pre.classList.add("numbered");
     });
   }

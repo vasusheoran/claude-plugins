@@ -646,10 +646,11 @@ body.cmt-pick .cmt-nav {
   border: 1px solid var(--line-strong); border-radius: 12px;
   padding: 18px; background: var(--bg-soft);
 }
-.qopts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.qopts { margin-top: 10px; display: flex; flex-direction: column; }
 .qopt {
   position: relative;
   display: flex; align-items: flex-start; gap: 10px;
+  margin: 7px 0;  /* authored options sit outside .qopts — space them directly */
   border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 10px 34px;
   background: var(--bg); cursor: pointer; font-size: 14.5px; line-height: 1.45;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);

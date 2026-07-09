@@ -85,26 +85,29 @@ python3 canvas/<slug>/serve.py --dir canvas/<slug> --port 8000 --open &
 live-refreshes on its own by polling `/api/version` — that's the browser's job,
 not yours.
 
-**The default review loop is push.** After serving, start a background watcher
-that long-polls `/api/wait` and returns the instant the reviewer submits a
-*Submit*-to-Claude comment or an approval — waking you immediately instead of
-polling:
+**The default review loop is push, and serving without a watcher is a bug.**
+Immediately after serving, start this background watcher — it long-polls
+`/api/wait`, and on an approval it **POSTs the ack itself before exiting**, so
+the reviewer's "awaiting Claude…" flips to "acknowledged" within the same push
+flow (not whenever you get around to it):
 
 ```bash
-curl -s "http://127.0.0.1:8000/api/wait?since=0&timeout=300&events=agent"
+B=http://127.0.0.1:8000
+R=$(curl -s "$B/api/wait?since=<cursor>&timeout=540&events=agent")
+if [ "$(printf %s "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["event"])')" = "approval" ]; then
+  D=$(curl -s $B/api/approval | python3 -c 'import sys,json;print(json.load(sys.stdin)["decidedAt"])')
+  curl -s -X POST $B/api/ack -d "{\"decidedAt\":\"$D\",\"by\":\"Claude\",\"message\":\"picked up — on it\"}" >/dev/null
+fi
+printf %s "$R"
 ```
 
-It returns `{"cursor": N, "event": "comment"|"approval"|null}`. On any wake
-(event fired) or timeout (`event:null`), read the state, then **relaunch it with
-`since=<cursor>`** so you don't re-fire on the same events. Use `events=any` to
-also wake on answers/notes. When you pick up a submission, POST the ack so the
-reviewer's confirmation is real:
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/api/ack \
-  -H 'Content-Type: application/json' \
-  -d '{"decidedAt":"<approval.decidedAt>","by":"Claude","message":"on it"}'
-```
+It prints `{"cursor": N, "event": "comment"|"approval"|null}`. On any wake
+(event fired) or timeout (`event:null`), read the state files, act, then
+**relaunch it with `since=<cursor>`** so you don't re-fire on the same events
+(first launch: `since=0`, or the cursor from a `timeout=0` probe). Use
+`events=any` to also wake on answers/notes. Send a follow-up ack with a real
+message once you've actually read the feedback — the auto-ack only confirms
+pickup.
 
 **State files** to read (next to the artifacts) before editing, after any pause,
 and before your final response:
