@@ -35,7 +35,7 @@
         "url": "https://github.com/vasusheoran/claude-plugins.git",
         "path": "plugins/canvas",
         "ref": "main",
-        "sha": "8150660ac0325a7914630df36c4c189e5c3bc473"
+        "sha": "a982129d3ab4fbe1d34ab1e4ef4cefd49bef163f"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
     }
