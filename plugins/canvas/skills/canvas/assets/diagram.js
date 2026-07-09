@@ -34,7 +34,7 @@
       '<defs>' +
       '<marker id="arw-' + uid + '" viewBox="0 0 10 10" refX="9" refY="5"' +
       ' markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
-      '<path d="M0,0 L10,5 L0,10 z" fill="var(--line-strong)"/>' +
+      '<path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/>' +
       '</marker>' +
       '</defs>'
     );
@@ -142,7 +142,7 @@
       // Header box
       parts.push(
         '<rect x="' + boxX + '" y="' + boxY + '" width="' + boxW + '" height="' + SEQ.PH + '"' +
-        ' rx="' + SEQ.RX + '" fill="var(--bg-soft)" stroke="var(--line)"/>'
+        ' rx="' + SEQ.RX + '" fill="var(--bg)" stroke="var(--line-strong)" stroke-width="1.5"/>'
       );
       parts.push(
         '<text x="' + centerX + '" y="' + (boxY + SEQ.PH / 2 + 5) + '"' +
@@ -152,7 +152,7 @@
       parts.push(
         '<line x1="' + centerX + '" y1="' + boxBottom + '"' +
         ' x2="' + centerX + '" y2="' + diagramBottom + '"' +
-        ' stroke="var(--line)" stroke-dasharray="4 4"/>'
+        ' stroke="var(--line-strong)" stroke-width="1.2" stroke-dasharray="4 4"/>'
       );
       parts.push('</g>');
     }
@@ -180,12 +180,13 @@
         );
       }
 
-      // Message line
+      // Message line — calls read in ink, returns quieter in muted (design dg-call/dg-return)
       parts.push(
         '<line class="' + lineClass + '"' +
         ' x1="' + fromX + '" y1="' + msgY + '"' +
         ' x2="' + lineEndX + '" y2="' + msgY + '"' +
-        ' stroke="var(--line-strong)"' + dashAttr +
+        ' stroke="' + (isReturn ? "var(--muted)" : "var(--ink)") + '"' +
+        ' stroke-width="' + (isReturn ? "1.3" : "1.5") + '"' + dashAttr +
         ' marker-end="' + arwRef + '"/>'
       );
 
@@ -319,7 +320,7 @@
 
       parts.push(
         '<path class="edge" d="' + pathD + '"' +
-        ' fill="none" stroke="var(--line-strong)" marker-end="' + arwRef + '"/>'
+        ' fill="none" stroke="var(--line-strong)" stroke-width="1.5" marker-end="' + arwRef + '"/>'
       );
 
       if (edge.label) {
@@ -348,7 +349,7 @@
           '<rect class="node step"' +
           ' x="' + (cx2 - FLOW.NW / 2) + '" y="' + (cy - FLOW.NH / 2) + '"' +
           ' width="' + FLOW.NW + '" height="' + FLOW.NH + '"' +
-          ' rx="8" fill="var(--bg-soft)" stroke="var(--line)"/>'
+          ' rx="8" fill="var(--bg)" stroke="var(--line-strong)" stroke-width="1.5"/>'
         );
       } else if (kind === "start") {
         var rx2 = FLOW.NH / 2;
@@ -356,7 +357,7 @@
           '<rect class="node start"' +
           ' x="' + (cx2 - FLOW.NW / 2) + '" y="' + (cy - FLOW.NH / 2) + '"' +
           ' width="' + FLOW.NW + '" height="' + FLOW.NH + '"' +
-          ' rx="' + rx2 + '" fill="var(--bg-soft)" stroke="var(--line-strong)"/>'
+          ' rx="' + rx2 + '" fill="var(--decision-bg)" stroke="var(--decision)" stroke-width="1.5"/>'
         );
       } else if (kind === "decision") {
         var dx = 85, dy = 28;
@@ -371,7 +372,7 @@
           (cx2 + dx) + "," + cy + " L" +
           cx2 + "," + (cy + dy) + " L" +
           (cx2 - dx) + "," + cy + " Z" +
-          '" fill="var(--bg)" stroke="var(--line-strong)"/>'
+          '" fill="var(--note-bg)" stroke="var(--note)" stroke-width="1.5"/>'
         );
       }
 

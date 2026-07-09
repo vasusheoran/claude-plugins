@@ -114,6 +114,11 @@ near the bottom (see Open questions). Don't scatter questions through a document
 </section>
 ```
 
+The widget adds a **"Decide for me"** option to every choice question
+automatically (answer value `"__defer__"` = apply your recommended default) —
+never author it yourself. Clicking a selected option again unselects it
+(`value: null` = open again).
+
 - `data-question-mode`: `single` (radio), `multi` (checkbox), or `freeform`
   (a textarea is rendered automatically — omit `.qopt` children).
 - `data-question-id` must be unique and stable — answers key off it.

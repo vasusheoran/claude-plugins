@@ -526,6 +526,16 @@
           host.querySelector("textarea").value = saved.value || "";
         }
       } else {
+        // Every choice question gets a synthetic "Decide for me" option —
+        // its value "__defer__" tells the agent to apply the recommended
+        // default. Authors never write this option themselves.
+        if (!el.querySelector('.qopt[data-value="__defer__"]')) {
+          var defer = document.createElement("div");
+          defer.className = "qopt defer";
+          defer.setAttribute("data-value", "__defer__");
+          defer.textContent = "Decide for me — go with the recommendation";
+          host.appendChild(defer);
+        }
         var opts = el.querySelectorAll(":scope > .qopt, :scope .qopts > .qopt");
         opts.forEach(function (opt) {
           var val = opt.getAttribute("data-value");
@@ -540,9 +550,19 @@
               var value;
               if (mode === "multi") {
                 value = (cur && cur.value) ? cur.value.slice() : [];
-                var at = value.indexOf(val);
-                if (at === -1) value.push(val); else value.splice(at, 1);
-              } else { value = val; }
+                if (val === "__defer__") {
+                  // defer is exclusive: it replaces any picks, or unselects itself
+                  value = value.indexOf("__defer__") === -1 ? ["__defer__"] : [];
+                } else {
+                  var at = value.indexOf(val);
+                  if (at === -1) value.push(val); else value.splice(at, 1);
+                  var dat = value.indexOf("__defer__");
+                  if (dat !== -1) value.splice(dat, 1);
+                }
+              } else {
+                // clicking the selected option again unselects it
+                value = (cur && cur.value === val) ? null : val;
+              }
               upsertAnswer({ questionId: qid, questionLabel: label, mode: mode, value: value })
                 .then(function () { renderQuestions(); renderNav(); });
             });
@@ -550,7 +570,14 @@
         });
       }
       var st = el.querySelector(".qstate");
-      if (st) st.textContent = saved ? "Answered ✓" : "";
+      if (st) {
+        var v = saved && saved.value;
+        var answered = v != null && (Array.isArray(v) ? v.length > 0 : String(v).length > 0);
+        st.textContent = answered
+          ? (v === "__defer__" || (Array.isArray(v) && v[0] === "__defer__")
+              ? "Deferred to Claude ✓" : "Answered ✓")
+          : "";
+      }
     });
   }
 

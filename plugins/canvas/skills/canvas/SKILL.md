@@ -116,7 +116,9 @@ and before your final response:
   defaults to `plan.html`). Reviewers can resolve/reopen from the page.
 - **`answers.json`** — inline question-block answers, one per `questionId`
   (`value` is a string for `single`/`freeform`, an array for `multi`). How open
-  decisions settle.
+  decisions settle. A `value` of `"__defer__"` (or `["__defer__"]`) means the
+  reviewer delegated the choice — apply your recommended default and say so;
+  `null`/empty means they unselected and the question is open again.
 - **`approval.json`** — `state` is `null` / `"approved"` /
   `"changes-requested"`, with an optional `note`. Plan-mode gate.
 - **`ack.json`** — your acknowledgement, keyed to a submission's `decidedAt`.
