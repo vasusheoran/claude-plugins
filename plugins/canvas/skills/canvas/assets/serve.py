@@ -240,8 +240,19 @@ class EventBus:
                 self._lock.wait(timeout=remaining)
 
 
-def safe_path(root, url_path):
-    """Resolve url_path to a file inside root, or None if it escapes."""
+# The only files the shared-asset fallback may serve. Workspaces used to carry
+# copies of these; canvasd passes assets_dir so they resolve to the skill's
+# shared copy when the workspace has none (a workspace file always wins).
+SHARED_ASSETS = {"plan.css", "comments.js", "diagram.js"}
+
+
+def safe_path(root, url_path, assets_dir=None):
+    """Resolve url_path to a file inside root, or None if it escapes.
+
+    With assets_dir set, an allowlisted asset name missing from root falls
+    back to assets_dir. The escape check runs first — a traversal attempt
+    never reaches the fallback.
+    """
     root = Path(root).resolve()
     rel = url_path.split("?", 1)[0].lstrip("/")
     if rel in ("", "/"):
@@ -249,6 +260,8 @@ def safe_path(root, url_path):
     target = (root / rel).resolve()
     if root != target and root not in target.parents:
         return None
+    if assets_dir and rel in SHARED_ASSETS and not target.exists():
+        return Path(assets_dir) / rel
     return target
 
 
@@ -299,7 +312,7 @@ def _list_pages(plan_dir):
     return pages
 
 
-def make_handler(plan_dir):
+def make_handler(plan_dir, assets_dir=None):
     plan_dir = Path(plan_dir).resolve()
     comments = CommentStore(plan_dir / "comments.json")
     answers = AnswerStore(plan_dir / "answers.json")
@@ -362,7 +375,7 @@ def make_handler(plan_dir):
                     kinds = {"comment", "approval"}
                 result = bus.wait(since=since, kinds=kinds, timeout=timeout)
                 return self._json(200, result)
-            target = safe_path(plan_dir, self.path)
+            target = safe_path(plan_dir, self.path, assets_dir=assets_dir)
             if target is None:
                 return self.send_error(403, "Forbidden")
             if not target.is_file():
@@ -408,6 +421,14 @@ def make_handler(plan_dir):
                     payload.get("message", "")))
             return self.send_error(404, "Not found")
 
+    # canvasd's MCP tools act on the same stores and EventBus the browser
+    # posts to (shared locks; wait/notify must share one bus) — expose them.
+    Handler.plan_dir = plan_dir
+    Handler.comments = comments
+    Handler.answers = answers
+    Handler.approval = approval
+    Handler.ack = ack
+    Handler.bus = bus
     return Handler
 
 

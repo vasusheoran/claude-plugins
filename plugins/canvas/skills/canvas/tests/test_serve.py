@@ -537,5 +537,78 @@ class WaitApiTests(TmpDirCase):
         self.assertIsNone(second["event"])
 
 
+# ---------------------------------------------------------------------------
+# Shared-asset fallback: workspaces stop carrying copies of the review assets;
+# canvasd passes assets_dir and the server falls back to the skill's shared
+# copy for exactly plan.css / comments.js / diagram.js — nothing else, and
+# only when the workspace has no file of its own.
+# ---------------------------------------------------------------------------
+
+class AssetFallbackTests(TmpDirCase):
+    def setUp(self):
+        super().setUp()
+        self.ws = self.tmp / "ws"
+        self.ws.mkdir()
+        (self.ws / "plan.html").write_text("<h1>p</h1>")
+        self.assets = self.tmp / "assets"
+        self.assets.mkdir()
+        (self.assets / "plan.css").write_text("/* shared */")
+        (self.assets / "comments.js").write_text("// shared")
+        (self.assets / "secret.txt").write_text("not servable")
+
+    def test_missing_workspace_asset_falls_back_to_shared(self):
+        got = serve.safe_path(self.ws, "/plan.css", assets_dir=self.assets)
+        self.assertEqual(got.resolve(), (self.assets / "plan.css").resolve())
+
+    def test_workspace_copy_wins_over_shared(self):
+        (self.ws / "plan.css").write_text("/* local */")
+        got = serve.safe_path(self.ws, "/plan.css", assets_dir=self.assets)
+        self.assertEqual(got.resolve(), (self.ws / "plan.css").resolve())
+
+    def test_only_allowlisted_names_fall_back(self):
+        got = serve.safe_path(self.ws, "/secret.txt", assets_dir=self.assets)
+        # not allowlisted: resolves into the workspace (a miss -> 404), never
+        # into the shared dir
+        self.assertEqual(got.resolve(), (self.ws / "secret.txt").resolve())
+
+    def test_traversal_still_blocked_with_assets_dir(self):
+        self.assertIsNone(serve.safe_path(
+            self.ws, "/../../etc/passwd", assets_dir=self.assets))
+
+    def test_no_fallback_without_assets_dir(self):
+        got = serve.safe_path(self.ws, "/plan.css")
+        self.assertEqual(got.resolve(), (self.ws / "plan.css").resolve())
+
+    def test_http_serves_fallback_asset(self):
+        httpd = HTTPServer(("127.0.0.1", 0),
+                           serve.make_handler(self.ws, assets_dir=self.assets))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            base = f"http://127.0.0.1:{httpd.server_address[1]}"
+            with urllib.request.urlopen(f"{base}/plan.css", timeout=5) as r:
+                self.assertEqual(r.status, 200)
+                self.assertIn(b"/* shared */", r.read())
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(f"{base}/secret.txt", timeout=5)
+            self.assertEqual(ctx.exception.code, 404)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+class HandlerExposureTests(TmpDirCase):
+    """canvasd's MCP tools operate on the same stores and EventBus the browser
+    talks to — make_handler exposes them on the returned class."""
+
+    def test_make_handler_exposes_stores_bus_and_dir(self):
+        cls = serve.make_handler(self.tmp)
+        for attr in ("comments", "answers", "approval", "ack", "bus",
+                     "plan_dir"):
+            self.assertTrue(hasattr(cls, attr), attr)
+        cls.comments.add({"blockId": "x", "body": "via class"})
+        on_disk = json.loads((self.tmp / "comments.json").read_text())
+        self.assertEqual(on_disk["comments"][0]["body"], "via class")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

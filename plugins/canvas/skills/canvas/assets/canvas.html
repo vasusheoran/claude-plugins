@@ -2,8 +2,8 @@
 <!--
   canvas scaffold for non-plan artifacts (mockup / decide / diagram / doc).
   Copy this into the workspace once per artifact and rename freely —
-  mockup-a.html, options.html, arch.html, notes.html. serve.py lists every
-  *.html in the folder as a tab.
+  mockup-a.html, options.html, arch.html, notes.html. Every *.html in the
+  folder appears as a tab.
   Rules:
    - Every reviewable section is <section class="block" data-block-id="..."
      data-block-label="..."> so it can be commented on.
@@ -17,10 +17,11 @@
    - <body data-approval="off"> means no approval gate (correct for
      mockup/diagram/doc). If this artifact should carry the gate (a decide page
      you want signed off, or a plan-like page), remove data-approval="off".
-   - Keep plan.css / comments.js as sibling files (linked below). diagram.js is
-     also copied into the workspace — uncomment its <script> below to render
-     sequence/flow diagrams from a <script type="application/json" data-diagram>
-     spec (see references/svg-diagrams.md for the chooser and spec shapes).
+   - plan.css / comments.js / diagram.js are served by the canvasd daemon
+     (shared assets — no copies in the workspace). Uncomment the diagram.js
+     <script> below to render sequence/flow diagrams from a
+     <script type="application/json" data-diagram> spec (see
+     references/svg-diagrams.md for the chooser and spec shapes).
    - To comment: click 💬 Comment in the nav (or press C) then click an element,
      Alt-click a point, or select text; Esc exits. The review UI only listens
      while Comment mode is on, so interactive prototypes here are safe to click.

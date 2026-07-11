@@ -15,6 +15,20 @@
 (function () {
   "use strict";
 
+  // Review-API base: the directory of the current page, so this one asset
+  // works served at root by serve.py (/plan.html -> /api/…) and under a
+  // canvasd workspace prefix (/w/<key>/plan.html -> /w/<key>/api/…).
+  function apiBase(pathname) {
+    var p = pathname || "/";
+    var cut = p.lastIndexOf("/");
+    return cut < 0 ? "/" : p.slice(0, cut + 1);
+  }
+  if (typeof window === "undefined" && typeof module !== "undefined") {
+    module.exports = { apiBase: apiBase };
+    return; // node test harness: expose the pure core, skip the DOM widget
+  }
+  function api(path) { return apiBase(location.pathname) + "api/" + path; }
+
   var hasServer = location.protocol.startsWith("http");
   var LS = "visual-plan::" + location.pathname;
   var state = { comments: [], answers: [], approval: { state: null, note: "" }, ack: {}, pages: [] };
@@ -60,21 +74,21 @@
       return Promise.resolve();
     }
     return Promise.all([
-      jget("/api/comments").then(function (d) { state.comments = d.comments || []; }),
-      jget("/api/answers").then(function (d) { state.answers = d.answers || []; }),
-      jget("/api/approval").then(function (d) { state.approval = d; }),
-      jget("/api/ack").then(function (d) { state.ack = d || {}; }),
-      jget("/api/version").then(function (d) { version = d; }),
+      jget(api("comments")).then(function (d) { state.comments = d.comments || []; }),
+      jget(api("answers")).then(function (d) { state.answers = d.answers || []; }),
+      jget(api("approval")).then(function (d) { state.approval = d; }),
+      jget(api("ack")).then(function (d) { state.ack = d || {}; }),
+      jget(api("version")).then(function (d) { version = d; }),
       // Multi-page workspace: tabs only appear for 2+ pages; a failure (e.g.
       // an older server) leaves pages empty so the nav is unchanged.
-      jget("/api/pages").then(function (d) { state.pages = (d && d.pages) || []; })
+      jget(api("pages")).then(function (d) { state.pages = (d && d.pages) || []; })
         .catch(function () { state.pages = []; }),
     ]);
   }
 
   function addComment(fields) {
     if (hasServer) {
-      return jpost("/api/comments", fields).then(function (c) { state.comments.push(c); return c; });
+      return jpost(api("comments"), fields).then(function (c) { state.comments.push(c); return c; });
     }
     var c = Object.assign({
       id: "c-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -85,14 +99,14 @@
   }
 
   function setStatus(id, action) {
-    if (hasServer) return jpost("/api/comments/" + id + "/" + action);
+    if (hasServer) return jpost(api("comments/" + id + "/" + action));
     var c = byId(id); if (c) c.status = action === "resolve" ? "resolved" : "open";
     lsSave(); return Promise.resolve();
   }
 
   function upsertAnswer(fields) {
     if (hasServer) {
-      return jpost("/api/answers", fields).then(function (a) { mergeAnswer(a); return a; });
+      return jpost(api("answers"), fields).then(function (a) { mergeAnswer(a); return a; });
     }
     var a = Object.assign({ answeredAt: new Date().toISOString() }, fields);
     mergeAnswer(a); lsSave(); return Promise.resolve(a);
@@ -104,7 +118,7 @@
 
   function setApproval(approvalState, note) {
     if (hasServer) {
-      return jpost("/api/approval", { state: approvalState, note: note })
+      return jpost(api("approval"), { state: approvalState, note: note })
         .then(function (d) { state.approval = d; });
     }
     state.approval = { state: approvalState, note: note, decidedAt: new Date().toISOString() };
@@ -792,7 +806,7 @@
 
   function poll() {
     if (!hasServer) return;
-    jget("/api/version").then(function (v) {
+    jget(api("version")).then(function (v) {
       if (v.plan && version.plan && v.plan !== version.plan) {
         location.reload(); return;             // plan body changed → reload
       }

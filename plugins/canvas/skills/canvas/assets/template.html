@@ -11,9 +11,10 @@
      references/document-quality.md). Inline CSS/JS is allowed when the plan
      genuinely needs it — two invariants: keep comments.js loaded (below) and
      don't remove/renumber anchored elements (data-block-id / data-cmt-id).
-   - Keep plan.css / comments.js as sibling files (linked below). diagram.js is
-     also copied into the workspace; load it after comments.js only if this plan
-     uses a <script type="application/json" data-diagram> spec.
+   - plan.css / comments.js / diagram.js are served by the canvasd daemon
+     (shared assets — no copies in the workspace); load diagram.js after
+     comments.js only if this plan uses a
+     <script type="application/json" data-diagram> spec.
    - For non-plan artifacts (mockup / decide / diagram / doc) start from
      canvas.html instead — same folder, its own tab, no gate.
 -->
