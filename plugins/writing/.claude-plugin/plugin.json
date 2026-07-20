@@ -1,0 +1,8 @@
+{
+  "name": "writing",
+  "description": "Writing-quality skills — anti-ai-writing: rules distilled from Wikipedia's 'Signs of AI writing' so prose (docs, ADRs, plans, PR text, copy) doesn't read as machine-generated",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}

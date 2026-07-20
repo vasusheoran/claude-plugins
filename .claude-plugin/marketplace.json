@@ -38,6 +38,16 @@
         "sha": "f8b45fee7595d1df639ca0e4938cc03138d22a23"
       },
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
+    },
+    {
+      "name": "writing",
+      "description": "Writing-quality skills — anti-ai-writing: rules distilled from Wikipedia's 'Signs of AI writing' so prose doesn't read as machine-generated.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": "./plugins/writing",
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/writing"
     }
   ]
 }
