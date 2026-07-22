@@ -256,7 +256,13 @@ def safe_path(root, url_path, assets_dir=None):
     root = Path(root).resolve()
     rel = url_path.split("?", 1)[0].lstrip("/")
     if rel in ("", "/"):
-        return root / "plan.html"
+        default = root / "plan.html"
+        if default.exists():
+            return default
+        # Mockup/doc workspaces have no plan.html — serve the first page
+        # (_list_pages order: plan.html first, then alphabetical) instead of 404.
+        pages = _list_pages(root)
+        return (root / pages[0]["file"]) if pages else default
     target = (root / rel).resolve()
     if root != target and root not in target.parents:
         return None
