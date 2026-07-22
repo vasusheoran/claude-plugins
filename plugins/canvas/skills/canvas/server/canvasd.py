@@ -176,21 +176,40 @@ def make_tools(registry, assets_dir, base_url):
         if mode not in ("plan", "canvas"):
             raise ValueError(f"mode must be 'plan' or 'canvas', got {mode!r}")
         d.mkdir(parents=True, exist_ok=True)
+        seeded = False
         if not any(p.suffix.lower() == ".html"
                    for p in d.iterdir() if p.is_file()):
             template = "template.html" if mode == "plan" else "canvas.html"
             page = "plan.html" if mode == "plan" else "canvas.html"
             (d / page).write_text((assets_dir / template).read_text())
+            seeded = True
         key, cls = _ws({"dir": str(d)})
+        pages = serve._list_pages(d.resolve())
         url = f"{base_url()}/w/{key}/"
-        if args.get("open_browser", True):
+        if pages:
+            url += pages[0]["file"]
+        # A just-seeded workspace holds only the blank template — never show
+        # that to the reviewer. Explicit open_browser overrides either way.
+        open_browser = args.get("open_browser")
+        if open_browser is None:
+            open_browser = not seeded
+        browser_opened = False
+        if open_browser:
             try:
                 webbrowser.open(url)
+                browser_opened = True
             except Exception:
                 pass
-        return {"url": url, "key": key, "dir": str(d.resolve()),
-                "pages": serve._list_pages(d.resolve()),
-                "feedback": _state(cls)}
+        result = {"url": url, "key": key, "dir": str(d.resolve()),
+                  "seeded": seeded, "browser_opened": browser_opened,
+                  "pages": pages, "feedback": _state(cls)}
+        if seeded and not browser_opened:
+            result["note"] = (
+                "Seeded a blank starting template; the browser was NOT "
+                "opened. Author the page(s), then call canvas_open again — "
+                "that call opens the reviewer's browser, and only then "
+                "share the url.")
+        return result
 
     def canvas_wait(args):
         _, cls = _ws(args)
@@ -262,16 +281,22 @@ def make_tools(registry, assets_dir, base_url):
         "canvas_open": {
             "description":
                 "Open (creating if needed) a canvas workspace and get its "
-                "review URL. Copies only the starting template on first open; "
-                "shared review assets are served by the daemon. Returns url, "
-                "key, pages, and current feedback state.",
+                "review URL. On first open it seeds the starting template and "
+                "does NOT launch the browser (the page is blank; seeded=true "
+                "in the result) — author your pages, then call canvas_open "
+                "again: it launches the reviewer's browser at the first page. "
+                "Share the url with the user only once the pages are authored. "
+                "Returns url, key, pages, seeded, browser_opened, and current "
+                "feedback state.",
             "inputSchema": _dir_schema({
                 "mode": {"type": "string", "enum": ["plan", "canvas"],
                          "description": "plan = gated plan template (default);"
                                         " canvas = ungated artifact template."},
                 "open_browser": {"type": "boolean",
-                                 "description": "Open the URL in the default "
-                                                "browser (default true)."}}),
+                                 "description": "Force the browser open (true) "
+                                                "or closed (false). Default: "
+                                                "open unless this call seeded "
+                                                "the blank template."}}),
             "fn": canvas_open,
         },
         "canvas_wait": {

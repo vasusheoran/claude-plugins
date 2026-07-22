@@ -343,6 +343,64 @@ class CanvasOpenTests(McpToolsCase):
         self.assertIn("pending note", bodies)
 
 
+class CanvasOpenBrowserTests(McpToolsCase):
+    """The browser must never open on a just-seeded blank template. Seeding
+    returns seeded=true with no launch; a later open — once pages are
+    authored — launches the browser at the first page, and that URL (not the
+    bare workspace dir) is what gets shared. Explicit open_browser wins."""
+
+    def setUp(self):
+        super().setUp()
+        self.opened = []
+        self._orig_open = canvasd.webbrowser.open
+        canvasd.webbrowser.open = self.opened.append
+
+    def tearDown(self):
+        canvasd.webbrowser.open = self._orig_open
+        super().tearDown()
+
+    def test_seeding_open_does_not_launch_browser(self):
+        ws = self.tmp / "proj" / "canvas" / "unauthored"
+        err, out = self.call("canvas_open", {"dir": str(ws), "mode": "plan"})
+        self.assertFalse(err)
+        self.assertEqual(self.opened, [])
+        self.assertTrue(out["seeded"])
+        self.assertFalse(out["browser_opened"])
+        self.assertTrue(out.get("note"))  # tells the agent to author first
+
+    def test_reopen_after_authoring_launches_browser_at_first_page(self):
+        ws = self.tmp / "proj" / "canvas" / "authored"
+        self.call("canvas_open", {"dir": str(ws), "mode": "plan"})
+        (ws / "plan.html").write_text("<title>Real plan</title>AUTHORED")
+        err, out = self.call("canvas_open", {"dir": str(ws), "mode": "plan"})
+        self.assertFalse(err)
+        self.assertFalse(out["seeded"])
+        self.assertTrue(out["browser_opened"])
+        self.assertEqual(self.opened, [out["url"]])
+        self.assertTrue(out["url"].endswith("/plan.html"))
+        status, body = _get(out["url"])
+        self.assertEqual(status, 200)
+        self.assertIn(b"AUTHORED", body)
+
+    def test_explicit_open_browser_true_wins_while_seeding(self):
+        ws = self.tmp / "proj" / "canvas" / "forced"
+        err, out = self.call("canvas_open", {
+            "dir": str(ws), "mode": "plan", "open_browser": True})
+        self.assertFalse(err)
+        self.assertEqual(self.opened, [out["url"]])
+        self.assertTrue(out["browser_opened"])
+
+    def test_explicit_open_browser_false_wins_after_authoring(self):
+        ws = self.tmp / "proj" / "canvas" / "quiet"
+        ws.mkdir(parents=True)
+        (ws / "plan.html").write_text("already authored")
+        err, out = self.call("canvas_open", {
+            "dir": str(ws), "mode": "plan", "open_browser": False})
+        self.assertFalse(err)
+        self.assertEqual(self.opened, [])
+        self.assertFalse(out["browser_opened"])
+
+
 class CanvasFeedbackTests(McpToolsCase):
     def test_feedback_reads_full_state_and_cursor(self):
         _json_req("POST", f"{self.base}/w/{self.key}/api/comments",

@@ -8,7 +8,7 @@
  */
 "use strict";
 const assert = require("assert");
-const { apiBase } = require("../assets/comments.js");
+const { apiBase, tabHref } = require("../assets/comments.js");
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -46,6 +46,20 @@ test("base always ends with a slash (api paths append cleanly)", () => {
   ["/plan.html", "/w/x/plan.html", "/", ""].forEach((p) => {
     assert.ok(apiBase(p).endsWith("/"), p);
   });
+});
+
+// Tab links must stay inside the workspace prefix — a root-absolute
+// href ("/mockup-a.html") escapes /w/<key>/ and 404s on canvasd.
+test("tab links keep the canvasd workspace prefix", () => {
+  assert.strictEqual(tabHref("/w/k/plan.html", "mockup-a.html"), "/w/k/mockup-a.html");
+});
+
+test("tab links from a workspace directory URL", () => {
+  assert.strictEqual(tabHref("/w/k/", "plan.html"), "/w/k/plan.html");
+});
+
+test("tab links on a root-served page (standalone serve.py)", () => {
+  assert.strictEqual(tabHref("/plan.html", "mockup-a.html"), "/mockup-a.html");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

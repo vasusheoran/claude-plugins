@@ -39,9 +39,14 @@ passing the **absolute** dir:
 
 - `canvas_open(dir, mode)` creates the dir if needed and seeds the mode's
   starting page on first open — `mode:"plan"` → `plan.html` (carries the
-  approval gate), `mode:"canvas"` → `canvas.html` (ungated). It registers the
-  workspace and returns `{url, key, pages, feedback}` — **give the user the
-  url**. Reopening is idempotent and surfaces any pending feedback.
+  approval gate), `mode:"canvas"` → `canvas.html` (ungated). A first open
+  returns `seeded: true` and does **not** launch the browser — the page is
+  still the blank template, so **don't give the user the url yet**. Author
+  the page(s), then call `canvas_open` again: it launches the reviewer's
+  browser at the first page (`browser_opened: true`), and **that** is the
+  moment to give the user the url. Reopening is idempotent and surfaces any
+  pending feedback — pass `open_browser: false` when you're only checking
+  feedback, so reviewers don't collect extra tabs.
 - **No assets are copied.** The daemon serves the shared `plan.css` /
   `comments.js` / `diagram.js` to every workspace (a workspace-local copy
   would win, but don't make one — fix the shared asset instead).

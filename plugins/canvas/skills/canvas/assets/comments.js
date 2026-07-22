@@ -23,8 +23,11 @@
     var cut = p.lastIndexOf("/");
     return cut < 0 ? "/" : p.slice(0, cut + 1);
   }
+  // Sibling-page link: tabs must stay inside the /w/<key>/ prefix — a
+  // root-absolute href escapes the workspace and 404s on canvasd.
+  function tabHref(pathname, file) { return apiBase(pathname) + file; }
   if (typeof window === "undefined" && typeof module !== "undefined") {
-    module.exports = { apiBase: apiBase };
+    module.exports = { apiBase: apiBase, tabHref: tabHref };
     return; // node test harness: expose the pure core, skip the DOM widget
   }
   function api(path) { return apiBase(location.pathname) + "api/" + path; }
@@ -732,8 +735,9 @@
     if (pages.length < 2) return "";
     var tabs = pages.map(function (pg) {
       var current = pg.file === curPage;
-      return '<a class="cmt-tab' + (current ? " current" : "") + '" href="/' +
-        escapeHtml(pg.file) + '"' + (current ? ' aria-current="page"' : "") + '>' +
+      return '<a class="cmt-tab' + (current ? " current" : "") + '" href="' +
+        escapeHtml(tabHref(location.pathname, pg.file)) + '"' +
+        (current ? ' aria-current="page"' : "") + '>' +
         escapeHtml(pg.title || pg.file) + "</a>";
     }).join("");
     return '<nav class="cmt-tabs">' + tabs + "</nav>";
