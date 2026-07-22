@@ -1,0 +1,8 @@
+{
+  "name": "foreman",
+  "description": "Orchestrated implementation workflow — foreman: plan on canvas, get approval, delegate work items to Opus/Sonnet subagents (in-process or in herdr tabs) under strict TDD; grill-me: adversarial self-review of a draft before the user sees it.",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}

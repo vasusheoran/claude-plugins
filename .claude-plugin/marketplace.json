@@ -40,6 +40,16 @@
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/canvas"
     },
     {
+      "name": "foreman",
+      "description": "Orchestrated implementation workflow — foreman: plan on canvas, get approval, delegate work items to Opus/Sonnet subagents (in-process or in herdr tabs) under strict TDD; grill-me: adversarial self-review of a draft before the user sees it.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": "./plugins/foreman",
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/foreman"
+    },
+    {
       "name": "writing",
       "description": "Writing-quality skills — anti-ai-writing: rules distilled from Wikipedia's 'Signs of AI writing' so prose doesn't read as machine-generated.",
       "author": {
