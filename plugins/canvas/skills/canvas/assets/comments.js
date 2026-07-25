@@ -378,6 +378,7 @@
     // Otherwise → element anchor via the picker.
     e.preventDefault(); e.stopPropagation();
     openComposer(pickTarget(e.target), null, true);
+    setPickMode(false);
   }, true);
 
   /* ---------------------- no-mode selection bubble ------------------- */
@@ -447,7 +448,12 @@
   }, true);
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && pickMode) { setPickMode(false); return; }
+    if (e.key === "Escape") {
+      // Composer open → one Esc dismisses it (mode already exited on pick).
+      if (activeComposer) { closeComposer(true); return; }
+      if (pickMode) { setPickMode(false); return; }
+      return;                        // nothing active: don't swallow the key
+    }
     // Bare "c"/"C" toggles the mode: no modifiers, not while typing, and only
     // when the page hasn't opted out via <body data-comment-key="off">.
     if ((e.key === "c" || e.key === "C") &&
@@ -623,7 +629,7 @@
     box.className = "cmt-composer";
     box.innerHTML =
       '<div class="quote">' + ctx + "</div>" +
-      '<textarea placeholder="What should change here?"></textarea>' +
+      '<textarea placeholder="What should change here?  (Shift+Enter to add)"></textarea>' +
       '<div class="actions">' +
         '<button class="cmt-btn cancel">Cancel</button>' +
         '<button class="cmt-btn primary add">Add</button>' +
@@ -632,6 +638,10 @@
     var ta = box.querySelector("textarea");
     ta.value = loadDraft(dkey); ta.focus();
     activeComposer = { box: box, ta: ta, dkey: dkey };
+    // Enter inserts a newline (default textarea behavior); Shift+Enter submits.
+    ta.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); save(); }
+    });
 
     function save() {
       var body = ta.value.trim(); if (!body) return;
