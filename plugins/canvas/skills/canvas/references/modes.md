@@ -31,7 +31,8 @@ with filler; never ship a single-step plan.
 **Contains.** The full plan structure from `document-quality.md`:
 outcome & scope → approach → architecture → key changes → risks & verification →
 open questions. Diagrams via the div kit or hand-authored SVG; wireframes for
-UI plans.
+UI plans. The body carries `data-canvas-kind="plan"` (already set in
+`template.html`).
 
 **Start from** `template.html`, copied to `plan.html`. **Read**
 `document-quality.md` before the body, `wireframe.md` before any UI screen,
@@ -59,7 +60,9 @@ block, and `approval.json` reads `"approved"`.
   options in the plan. Ask a clarifying question only when an ambiguity would
   change the design and you can't resolve it from the code; batch 2–4 via the
   normal ask-user-question flow. Otherwise state the assumption and proceed, and
-  keep anything unresolved in the single bottom **Open questions** block.
+  keep anything unresolved in the single bottom **Open questions** block. Argue
+  the default in prose — options render neutral, so don't put the lean in the
+  option text.
 - **The plan stands alone.** A reviewer opening it cold — no chat history —
   should understand it. No "unlike the previous version" / "this revision"
   language. State the positive model directly.
@@ -87,8 +90,8 @@ makes the review sharper. Model secondary states that interaction would hide
 (popover, error, loading) as separate frames so they stay reviewable.
 
 **Start from** `canvas.html`, renamed per variant (`mockup-a.html`,
-`mockup-b.html`). **Read** `wireframe.md`; the shared authoring bar in
-`document-quality.md` still applies.
+`mockup-b.html`), with `data-canvas-kind="mockup"` on the body. **Read**
+`wireframe.md`; the shared authoring bar in `document-quality.md` still applies.
 
 Interactive mockups are safe: the review UI only listens while Comment mode is
 on, so a reviewer clicking through a prototype never trips the comment picker.
@@ -106,14 +109,17 @@ schema, a rollout — and you want the decision captured, not just discussed.
 
 **Contains.** An options matrix (a `columns` block or a table: option × criteria)
 and one or more **interactive question blocks** as the primary surface; the
-question blocks are how the decision gets recorded in `answers.json`. Put a
-recommended default in the option text so the user can approve by silence.
+question blocks are how the decision gets recorded in `answers.json`. Options
+render neutral — argue for a default in the prose around the matrix, not in the
+option text; the reviewer can also pick **✎ Other…** or **◇ You decide, Claude**.
 
-**Start from** `canvas.html`. **Read** the shared authoring bar in
-`document-quality.md`.
+**Start from** `canvas.html`, with `data-canvas-kind="decision"` on the body.
+**Read** the shared authoring bar in `document-quality.md`.
 
 **Gate optional** — turn it on (drop `data-approval="off"`) only when you want an
-explicit sign-off on the chosen option, not just an answer.
+explicit sign-off on the chosen option, not just an answer. A gated page's
+decision is folded into the same **Send to Claude** popover as any pending
+comments, not a separate step.
 
 **Done** when the answer lands in `answers.json` (and, if gated,
 `approval.json`).
@@ -132,9 +138,10 @@ with `data-cmt-id` anchors for you. Use a hand-authored inline `<svg>` for
 freeform architecture/topology, tokens via `var(--ink)` etc., nodes tagged
 `data-cmt-id`. Pick the form from the chooser at the top of `svg-diagrams.md`.
 
-**Start from** `canvas.html`. **Read** `svg-diagrams.md` (the chooser picks
-diagram.js vs. hand SVG vs. the div kit). For a diagram.js spec, load
-`diagram.js` in the artifact after `comments.js`.
+**Start from** `canvas.html`, with `data-canvas-kind="diagram"` on the body.
+**Read** `svg-diagrams.md` (the chooser picks diagram.js vs. hand SVG vs. the
+div kit). For a diagram.js spec, load `diagram.js` in the artifact after
+`comments.js`.
 
 **Done** when the diagram is readable at 100% zoom, labels don't overlap edges,
 and the discussable nodes/participants are anchored (automatic for diagram.js
@@ -152,7 +159,7 @@ pasted into chat.
 annotated code, tables). Structure is up to the document; the shared authoring
 bar still holds.
 
-**Start from** `canvas.html`. **Read** the shared authoring bar in
-`document-quality.md`.
+**Start from** `canvas.html` — its seeded `data-canvas-kind="doc"` matches this
+mode already. **Read** the shared authoring bar in `document-quality.md`.
 
 **Done** when it stands alone and reads cleanly at the pre-handoff check.

@@ -6,7 +6,7 @@ A **canvas** is a per-topic workspace of HTML artifacts the user reviews in a
 browser. One local daemon (**canvasd**, 127.0.0.1 only) serves every canvas on
 one stable port and exposes the `canvas_*` MCP tools you drive it with:
 `canvas_open`, `canvas_wait`, `canvas_feedback`, `canvas_resolve`,
-`canvas_ack`, `canvas_export`. Nothing leaves the machine.
+`canvas_reply`, `canvas_ack`, `canvas_export`. Nothing leaves the machine.
 
 ## When to use / when to skip
 
@@ -84,35 +84,44 @@ Author each artifact from its template. Rules (full detail in
     canvas_wait(dir, since, timeout?, events?)
 
 First call `since=0`; every call returns a `cursor` — pass it back as `since`
-on the next call so nothing re-fires. It returns when the reviewer submits a
-comment to the agent or an approval decision (`event: "comment" | "approval"`),
-or on timeout (`event: null` — just call it again; the default 50 s window
-stays under Claude Code's ~60 s MCP tool-call timeout, and the cursor makes
-re-calling lossless). `events:"any"` also wakes
-on answers and notes. On an approval it **auto-acknowledges pickup** so the
-reviewer's "awaiting Claude…" flips immediately.
+on the next call so nothing re-fires. The reviewer drafts comments and answers
+at their own pace — those are visible via `canvas_feedback` but don't wake you.
+`canvas_wait` wakes on a **submission** event: the reviewer pressed
+**Send to Claude**, bundling every pending comment, all question answers, and
+(on gated pages) an approve / request-changes decision into one event. Legacy
+per-comment and per-approval wakes still fire the same way for older
+workspaces. On timeout it returns `event: null` — just call it again; the
+default 50 s window stays under Claude Code's ~60 s MCP tool-call timeout, and
+the cursor makes re-calling lossless. On a submission it **auto-acknowledges
+pickup** so the reviewer's "awaiting Claude…" flips immediately.
 
-On any wake, the result carries the open agent-targeted comments, answers, and
-approval state. Act on it:
+On any wake, the result carries the submitted batch: comments, answers, and
+the decision (if any). Act on it:
 
 - Apply changes by editing the referenced artifact (keep block ids stable so
   comments stay anchored). The browser refreshes itself.
 - `canvas_resolve(dir, comment_ids)` for comments you've addressed.
+- `canvas_reply(dir, comment_id, message)` to answer a specific reviewer
+  comment in-thread — use it for "done, see section 3" or a counter-question,
+  instead of only saying it in chat.
 - `canvas_ack(dir, message)` with a real message once you've actually read and
   applied a submission — the auto-ack only confirms pickup.
 - `canvas_feedback(dir)` reads the full state any time without blocking — use
   it before editing, after any pause, and before your final response.
 
 Feedback semantics (state also persists as JSON files next to the artifacts —
-gitignore `comments.json`, `answers.json`, `approval.json`, `ack.json` if the
-workspace is checked in):
+gitignore `comments.json`, `answers.json`, `approval.json`, `ack.json`,
+`activity.json` if the workspace is checked in):
 
-- **Comments**: `target: "agent"` = act on it; `"human"` = context. `parentId`
-  threads replies; `page` says which artifact (defaults to `plan.html`).
+- **Comments**: `state` is `"pending" | "sent" | "resolved"`. Pending drafts
+  are visible via `canvas_feedback` but are not action items yet — the
+  reviewer hasn't sent them. Act only on `sent` comments. `parentId` threads
+  replies; `page` says which artifact (defaults to `plan.html`).
 - **Answers** (inline question blocks): one per `questionId`. A value of
   `"__defer__"` (or `["__defer__"]`) means the reviewer delegated the choice —
-  apply your recommended default and say so; `null`/empty means unselected,
-  the question is open again.
+  apply your recommended default and say so. A value of `"__other__"` carries
+  the reviewer's own answer in the `otherText` field. `null`/empty means
+  unselected, the question is open again.
 - **Approval**: `state` is `null` / `"approved"` / `"changes-requested"`, with
   an optional `note`.
 
@@ -120,9 +129,9 @@ workspace is checked in):
 
 For plan artifacts the approval **is** the gate: only start writing code once
 `canvas_wait`/`canvas_feedback` reports `approval.state == "approved"`. A clean
-approval with no open *Submit*-to-Claude comments is the cue to stop planning
-and implement; open agent-targeted comments keep you in the loop. Planning
-stays read-only until then (see `references/modes.md`).
+approval with no open `sent` comments is the cue to stop planning and
+implement; open sent comments keep you in the loop. Planning stays read-only
+until then (see `references/modes.md`).
 
 ## Archival export
 

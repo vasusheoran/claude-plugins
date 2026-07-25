@@ -50,11 +50,12 @@ class CommentStoreTests(TmpDirCase):
         self.assertEqual(on_disk["comments"][0]["body"], "tighten")
 
     def test_add_assigns_id_and_defaults(self):
+        # v2 lifecycle: a reviewer comment is born a pending draft — editable,
+        # deletable, invisible to the agent until the batch is submitted.
         c = serve.CommentStore(self.tmp / "comments.json").add(
             {"blockId": "approach", "body": "x"})
         self.assertTrue(c["id"])
-        self.assertEqual(c["status"], "open")
-        self.assertEqual(c["target"], "agent")
+        self.assertEqual(c["state"], "pending")
         self.assertTrue(c["createdAt"])
 
     def test_add_preserves_anchor_fields(self):
@@ -69,19 +70,16 @@ class CommentStoreTests(TmpDirCase):
         self.assertEqual(c["quote"], "user_id is a string")
 
     def test_add_preserves_component_fields(self):
-        # A comment can anchor to a specific element (data-cmt-id) and choose
-        # whether it is just a note ("human") or an action item ("agent").
+        # A comment can anchor to a specific element (data-cmt-id).
         c = serve.CommentStore(self.tmp / "comments.json").add({
             "blockId": "dataflow",
             "blockLabel": "Data flow",
             "componentId": "submit",
             "componentLabel": "Submit button",
-            "target": "human",
             "body": "rename this box",
         })
         self.assertEqual(c["componentId"], "submit")
         self.assertEqual(c["componentLabel"], "Submit button")
-        self.assertEqual(c["target"], "human")
 
     def test_comments_survive_reload(self):
         path = self.tmp / "comments.json"
@@ -89,11 +87,11 @@ class CommentStoreTests(TmpDirCase):
         reloaded = serve.CommentStore(path)
         self.assertEqual([c["body"] for c in reloaded.list()], ["first"])
 
-    def test_resolve_marks_status(self):
+    def test_resolve_marks_state(self):
         store = serve.CommentStore(self.tmp / "comments.json")
         c = store.add({"blockId": "a", "body": "fix"})
         self.assertIs(store.resolve(c["id"]), True)
-        self.assertEqual(store.list()[0]["status"], "resolved")
+        self.assertEqual(store.list()[0]["state"], "resolved")
 
     def test_resolve_unknown_id_is_false(self):
         store = serve.CommentStore(self.tmp / "comments.json")
@@ -196,22 +194,134 @@ class ThreadAndAnchorTests(TmpDirCase):
         reply = store.add({"blockId": "a", "body": "re", "parentId": parent["id"]})
         self.assertEqual(reply["parentId"], parent["id"])
 
-    def test_reopen_sets_status_open(self):
+    def test_reopen_sets_state_sent(self):
+        # Reopening puts a comment back in front of the agent — "sent", not a
+        # fresh pending draft.
         store = serve.CommentStore(self.tmp / "comments.json")
         c = store.add({"blockId": "a", "body": "x"})
         store.resolve(c["id"])
         self.assertIs(store.reopen(c["id"]), True)
-        self.assertEqual(store.list()[0]["status"], "open")
+        self.assertEqual(store.list()[0]["state"], "sent")
 
     def test_reopen_unknown_id_is_false(self):
         store = serve.CommentStore(self.tmp / "comments.json")
         self.assertIs(store.reopen("nope"), False)
 
-    def test_add_preserves_pin_anchor(self):
-        store = serve.CommentStore(self.tmp / "comments.json")
-        c = store.add({"blockId": "diagram", "body": "here",
-                       "anchor": {"x": 40, "y": 55}})
-        self.assertEqual(c["anchor"], {"x": 40, "y": 55})
+
+# ---------------------------------------------------------------------------
+# Comment lifecycle (v2): pending -> sent -> resolved, edit/delete on drafts
+# only, submit_pending flips the batch, legacy status maps at read time.
+# ---------------------------------------------------------------------------
+
+class CommentLifecycleTests(TmpDirCase):
+    def _store(self):
+        return serve.CommentStore(self.tmp / "comments.json")
+
+    def test_claude_author_is_born_sent(self):
+        c = self._store().add({"body": "done", "author": "claude"})
+        self.assertEqual(c["state"], "sent")
+
+    def test_add_omits_status_and_target(self):
+        # v2 stops writing the retired v1 fields on new comments.
+        c = self._store().add({"blockId": "a", "body": "x"})
+        self.assertNotIn("status", c)
+        self.assertNotIn("target", c)
+
+    def test_add_stores_legacy_fields_if_client_sends_them(self):
+        c = self._store().add({"body": "x", "status": "open", "target": "agent"})
+        self.assertEqual(c["status"], "open")
+        self.assertEqual(c["target"], "agent")
+
+    def test_legacy_status_maps_to_state_at_read(self):
+        path = self.tmp / "comments.json"
+        path.write_text(json.dumps({"comments": [
+            {"id": "c-1", "body": "old open", "status": "open"},
+            {"id": "c-2", "body": "old resolved", "status": "resolved"},
+        ]}))
+        by_id = {c["id"]: c for c in serve.CommentStore(path).list()}
+        self.assertEqual(by_id["c-1"]["state"], "sent")
+        self.assertEqual(by_id["c-2"]["state"], "resolved")
+        # read-time mapping never rewrites the file
+        self.assertNotIn("state", json.loads(path.read_text())["comments"][0])
+
+    def test_resolve_keeps_legacy_status_in_sync(self):
+        path = self.tmp / "comments.json"
+        path.write_text(json.dumps(
+            {"comments": [{"id": "c-1", "body": "x", "status": "open"}]}))
+        serve.CommentStore(path).resolve("c-1")
+        on_disk = json.loads(path.read_text())["comments"][0]
+        self.assertEqual(on_disk["state"], "resolved")
+        self.assertEqual(on_disk["status"], "resolved")
+
+    def test_edit_pending_updates_body_and_timestamp(self):
+        s = self._store()
+        c = s.add({"body": "draft"})
+        self.assertIs(s.edit(c["id"], "revised"), True)
+        got = s.list()[0]
+        self.assertEqual(got["body"], "revised")
+        self.assertTrue(got["editedAt"])
+
+    def test_edit_sent_is_refused(self):
+        s = self._store()
+        c = s.add({"body": "draft"})
+        s.submit_pending()
+        self.assertIs(s.edit(c["id"], "too late"), False)
+        self.assertEqual(s.list()[0]["body"], "draft")
+
+    def test_edit_unknown_id_is_false(self):
+        self.assertIs(self._store().edit("nope", "x"), False)
+
+    def test_delete_pending_removes_it(self):
+        s = self._store()
+        c = s.add({"body": "oops"})
+        self.assertIs(s.delete(c["id"]), True)
+        self.assertEqual(s.list(), [])
+
+    def test_delete_sent_is_refused(self):
+        s = self._store()
+        c = s.add({"body": "keep"})
+        s.submit_pending()
+        self.assertIs(s.delete(c["id"]), False)
+        self.assertEqual(len(s.list()), 1)
+
+    def test_submit_pending_flips_and_returns_batch(self):
+        s = self._store()
+        a = s.add({"body": "one"})
+        b = s.add({"body": "two"})
+        sent = s.submit_pending()
+        self.assertEqual({c["id"] for c in sent}, {a["id"], b["id"]})
+        for c in s.list():
+            self.assertEqual(c["state"], "sent")
+            self.assertTrue(c["sentAt"])
+        # nothing pending left to submit
+        self.assertEqual(s.submit_pending(), [])
+
+
+# ---------------------------------------------------------------------------
+# ActivityStore: server-appended, append-only feed behind /api/activity
+# ---------------------------------------------------------------------------
+
+class ActivityStoreTests(TmpDirCase):
+    def test_empty(self):
+        self.assertEqual(
+            serve.ActivityStore(self.tmp / "activity.json").list(), [])
+
+    def test_append_returns_event_and_persists(self):
+        p = self.tmp / "activity.json"
+        s = serve.ActivityStore(p)
+        ev = s.append("submitted", "sent 2 items — changes requested",
+                      {"comments": ["c-1"], "decision": "changes-requested"})
+        self.assertEqual(ev["kind"], "submitted")
+        self.assertEqual(ev["summary"], "sent 2 items — changes requested")
+        self.assertEqual(ev["refs"]["decision"], "changes-requested")
+        self.assertTrue(ev["at"])
+        self.assertEqual(len(s.list()), 1)
+        self.assertEqual(serve.ActivityStore(p).list()[0]["kind"], "submitted")
+
+    def test_append_defaults_refs_to_none(self):
+        ev = serve.ActivityStore(self.tmp / "activity.json").append(
+            "acked", "applied all")
+        self.assertIsNone(ev["refs"])
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +428,8 @@ class NewHttpTests(TmpDirCase):
         self.assertEqual(status, 200)
         _, listing = _req("GET", f"{self.base}/api/comments")
         top = [c for c in listing["comments"] if c["id"] == parent["id"]][0]
-        self.assertEqual(top["status"], "open")
+        # reopen puts it back in front of the agent: state "sent", not a draft
+        self.assertEqual(top["state"], "sent")
 
     def test_answers_roundtrip(self):
         status, _ = _req("POST", f"{self.base}/api/answers",
@@ -357,6 +468,70 @@ class NewHttpTests(TmpDirCase):
         _req("POST", f"{self.base}/api/comments", {"blockId": "a", "body": "hi"})
         _, v2 = _req("GET", f"{self.base}/api/version")
         self.assertNotEqual(v1["comments"], v2["comments"])
+
+    def test_edit_and_delete_pending(self):
+        _, c = _req("POST", f"{self.base}/api/comments", {"body": "draft"})
+        status, res = _req(
+            "POST", f"{self.base}/api/comments/{c['id']}/edit",
+            {"body": "revised"})
+        self.assertEqual(status, 200)
+        self.assertTrue(res["ok"])
+        _, listing = _req("GET", f"{self.base}/api/comments")
+        self.assertEqual(listing["comments"][0]["body"], "revised")
+        status, res = _req(
+            "POST", f"{self.base}/api/comments/{c['id']}/delete")
+        self.assertEqual(status, 200)
+        self.assertTrue(res["ok"])
+        _, listing = _req("GET", f"{self.base}/api/comments")
+        self.assertEqual(listing["comments"], [])
+
+    def test_submit_with_decision(self):
+        _, c = _req("POST", f"{self.base}/api/comments", {"body": "do this"})
+        status, res = _req("POST", f"{self.base}/api/submit",
+                           {"decision": "changes-requested", "note": "nits"})
+        self.assertEqual(status, 200)
+        self.assertEqual([x["id"] for x in res["submitted"]], [c["id"]])
+        self.assertTrue(res["submittedAt"])
+        self.assertEqual(res["approval"]["state"], "changes-requested")
+        self.assertEqual(res["approval"]["note"], "nits")
+        _, listing = _req("GET", f"{self.base}/api/comments")
+        self.assertEqual(listing["comments"][0]["state"], "sent")
+        _, act = _req("GET", f"{self.base}/api/activity")
+        self.assertEqual(act["events"][-1]["kind"], "submitted")
+        self.assertIn("changes requested", act["events"][-1]["summary"])
+        self.assertEqual(act["events"][-1]["refs"]["decision"],
+                         "changes-requested")
+
+    def test_submit_without_decision_leaves_approval_unset(self):
+        _req("POST", f"{self.base}/api/comments", {"body": "fyi"})
+        status, res = _req("POST", f"{self.base}/api/submit",
+                           {"decision": None})
+        self.assertEqual(status, 200)
+        self.assertIsNone(res["approval"]["state"])
+        self.assertEqual(len(res["submitted"]), 1)
+
+    def test_activity_endpoint_starts_empty(self):
+        _, act = _req("GET", f"{self.base}/api/activity")
+        self.assertEqual(act["events"], [])
+
+    def test_version_includes_activity_and_pages(self):
+        _, v = _req("GET", f"{self.base}/api/version")
+        self.assertIn("activity", v)
+        self.assertIn("pages", v)
+        self.assertIn("plan.html", v["pages"])
+
+    def test_page_change_between_polls_logs_page_updated(self):
+        # first poll initializes the page-digest map silently (no event)
+        _req("GET", f"{self.base}/api/version")
+        _, act = _req("GET", f"{self.base}/api/activity")
+        self.assertEqual(act["events"], [])
+        # change the page, poll again → exactly one page-updated naming the file
+        (self.tmp / "plan.html").write_text("<h1>plan v2</h1>")
+        _req("GET", f"{self.base}/api/version")
+        _, act = _req("GET", f"{self.base}/api/activity")
+        updates = [e for e in act["events"] if e["kind"] == "page-updated"]
+        self.assertEqual(len(updates), 1)
+        self.assertIn("plan.html", updates[0]["summary"])
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +580,16 @@ class PagesApiTests(TmpDirCase):
         _, data = _req("GET", f"{self.base}/api/pages")
         by_file = {p["file"]: p["title"] for p in data["pages"]}
         self.assertEqual(by_file["raw.html"], "raw.html")
+
+    def test_pages_include_kind(self):
+        # data-canvas-kind on the body tag wins; else plan.html→plan, other→doc
+        (self.tmp / "flow.html").write_text(
+            '<body data-canvas-kind="diagram">f</body>')
+        _, data = _req("GET", f"{self.base}/api/pages")
+        by_file = {p["file"]: p["kind"] for p in data["pages"]}
+        self.assertEqual(by_file["plan.html"], "plan")
+        self.assertEqual(by_file["mockup.html"], "doc")
+        self.assertEqual(by_file["flow.html"], "diagram")
 
 
 # ---------------------------------------------------------------------------
@@ -477,9 +662,9 @@ class EventBusTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# /api/wait: what wakes the agent (decided in the canvas-rework plan review:
-# Submit review + Submit-to-Claude comments fire; notes and answers do not,
-# unless the watcher opts in with events=any)
+# /api/wait: what wakes the agent (v2 batch model: one "submission" event per
+# Send; individual comment POSTs are silent drafts. Direct /api/approval posts
+# still wake — the transition path for pages loaded with the old widget.)
 # ---------------------------------------------------------------------------
 
 class WaitApiTests(TmpDirCase):
@@ -500,19 +685,22 @@ class WaitApiTests(TmpDirCase):
         self.assertIsNone(got["event"])
         self.assertIn("cursor", got)
 
-    def test_agent_comment_fires_wait(self):
-        def later():
-            _req("POST", f"{self.base}/api/comments",
-                 {"blockId": "a", "body": "do this", "target": "agent"})
-        threading.Timer(0.1, later).start()
-        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=5")
-        self.assertEqual(got["event"], "comment")
-
-    def test_human_note_does_not_fire_wait(self):
+    def test_comment_post_is_a_silent_draft(self):
         _req("POST", f"{self.base}/api/comments",
-             {"blockId": "a", "body": "just a note", "target": "human"})
+             {"blockId": "a", "body": "still drafting"})
         _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=0.1")
         self.assertIsNone(got["event"])
+
+    def test_submit_fires_wait_with_submission(self):
+        _req("POST", f"{self.base}/api/comments",
+             {"blockId": "a", "body": "do this"})
+
+        def later():
+            _req("POST", f"{self.base}/api/submit",
+                 {"decision": "changes-requested"})
+        threading.Timer(0.1, later).start()
+        _, got = _req("GET", f"{self.base}/api/wait?since=0&timeout=5")
+        self.assertEqual(got["event"], "submission")
 
     def test_approval_fires_wait(self):
         _req("POST", f"{self.base}/api/approval", {"state": "approved"})
@@ -602,8 +790,8 @@ class HandlerExposureTests(TmpDirCase):
 
     def test_make_handler_exposes_stores_bus_and_dir(self):
         cls = serve.make_handler(self.tmp)
-        for attr in ("comments", "answers", "approval", "ack", "bus",
-                     "plan_dir"):
+        for attr in ("comments", "answers", "approval", "ack", "activity",
+                     "bus", "plan_dir"):
             self.assertTrue(hasattr(cls, attr), attr)
         cls.comments.add({"blockId": "x", "body": "via class"})
         on_disk = json.loads((self.tmp / "comments.json").read_text())

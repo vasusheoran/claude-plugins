@@ -22,9 +22,14 @@
      <script> below to render sequence/flow diagrams from a
      <script type="application/json" data-diagram> spec (see
      references/svg-diagrams.md for the chooser and spec shapes).
-   - To comment: click 💬 Comment in the nav (or press C) then click an element,
-     Alt-click a point, or select text; Esc exits. The review UI only listens
-     while Comment mode is on, so interactive prototypes here are safe to click.
+   - data-canvas-kind on the body declares this artifact's kind for the tab
+     strip. This scaffold seeds "doc" — set it to mockup/diagram/decision/doc
+     to match what you're actually authoring.
+   - To comment: select text to quote it (no mode needed — a floating 💬 Comment
+     bubble appears next to the selection), or press C (or click 💬 Comment in
+     the nav) then click an element; Esc exits. The review UI only listens while
+     Comment mode is on or text is selected, so interactive prototypes here are
+     safe to click.
 -->
 <html lang="en">
 <head>
@@ -37,7 +42,7 @@
        var(--line), var(--accent), … over hard-coded hex so themes hold. */
   </style>
 </head>
-<body data-approval="off">
+<body data-approval="off" data-canvas-kind="doc">
   <main class="plan">
 
     <div class="banner">

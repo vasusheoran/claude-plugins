@@ -144,18 +144,31 @@ def _cursor(cls):
     return cls.bus.wait(since=10 ** 9, kinds=None, timeout=0)["cursor"]
 
 
+def _open_agent_comments(cls):
+    # Open items for the agent: sent (not pending drafts, not resolved) and
+    # authored by the reviewer (claude's own replies are excluded).
+    return [c for c in cls.comments.list()
+            if c.get("state") == "sent" and c.get("author") != "claude"]
+
+
+def _pending_drafts(cls):
+    # Unsent drafts (any author), so a session can see the reviewer is
+    # mid-draft; kept separate from the actionable "comments" list.
+    return [c for c in cls.comments.list() if c.get("state") == "pending"]
+
+
 def _state(cls):
-    return {"comments": cls.comments.list(),
+    return {"comments": _open_agent_comments(cls),
+            "pending": _pending_drafts(cls),
             "answers": cls.answers.list(),
             "approval": cls.approval.get(),
             "ack": cls.ack.get(),
             "cursor": _cursor(cls)}
 
 
-def _open_agent_comments(cls):
-    return [c for c in cls.comments.list()
-            if c.get("status") != "resolved"
-            and c.get("target", "agent") == "agent"]
+def _latest_submitted(cls):
+    subs = [e for e in cls.activity.list() if e.get("kind") == "submitted"]
+    return subs[-1] if subs else None
 
 
 def make_tools(registry, assets_dir, base_url):
@@ -216,19 +229,29 @@ def make_tools(registry, assets_dir, base_url):
         since = int(args.get("since", 0))
         timeout = min(float(args.get("timeout", WAIT_DEFAULT_TIMEOUT)),
                       WAIT_MAX_TIMEOUT)
-        kinds = None if args.get("events") == "any" else {"comment",
+        kinds = None if args.get("events") == "any" else {"submission",
                                                           "approval"}
         r = cls.bus.wait(since=since, kinds=kinds, timeout=timeout)
         approval = cls.approval.get()
-        if r["event"] == "approval" and approval.get("decidedAt"):
-            # Pickup ack, so the reviewer's "awaiting Claude…" flips in the
-            # same flow; a substantive canvas_ack follows once feedback is
-            # actually read and applied.
+        submission = _latest_submitted(cls)
+        pickup = "picked up — reading the feedback now"
+        if r["event"] == "submission" and submission:
+            # Pickup ack keyed to the submitted activity event, so the
+            # reviewer's "awaiting Claude…" flips in the same flow; a
+            # substantive canvas_ack follows once feedback is applied.
+            if cls.ack.get().get("decidedAt") != submission["at"]:
+                cls.ack.set(submission["at"], "Claude", pickup)
+                cls.activity.append("picked-up", pickup)
+        elif r["event"] == "approval" and approval.get("decidedAt"):
+            # Legacy approval path: pages still running the old widget POST
+            # /api/approval directly; auto-ack keyed on approval.decidedAt.
             if cls.ack.get().get("decidedAt") != approval["decidedAt"]:
-                cls.ack.set(approval["decidedAt"], "Claude",
-                            "picked up — reading the feedback now")
+                cls.ack.set(approval["decidedAt"], "Claude", pickup)
         return {"cursor": r["cursor"], "event": r["event"],
                 "approval": approval,
+                "submission": ({"refs": submission["refs"],
+                                "at": submission["at"]}
+                               if submission else None),
                 "comments": _open_agent_comments(cls),
                 "answers": cls.answers.list()}
 
@@ -236,15 +259,45 @@ def make_tools(registry, assets_dir, base_url):
         _, cls = _ws(args)
         return _state(cls)
 
+    def canvas_reply(args):
+        _, cls = _ws(args)
+        comment_id = str(args["comment_id"])
+        parent = next((c for c in cls.comments.list()
+                       if c["id"] == comment_id), None)
+        if parent is None:
+            raise ValueError(f"no such comment: {comment_id}")
+        reply = cls.comments.add({
+            "parentId": comment_id,
+            "blockId": parent.get("blockId", ""),
+            "blockLabel": parent.get("blockLabel", ""),
+            "page": parent.get("page", "plan.html"),
+            "author": "claude",
+            "body": str(args.get("message", "")),
+        })
+        body = parent.get("body", "") or ""
+        quoted = body if len(body) <= 40 else body[:40] + "…"
+        cls.activity.append("replied", f'replied to "{quoted}"',
+                            {"comment": comment_id, "reply": reply["id"]})
+        return reply
+
     def canvas_resolve(args):
         _, cls = _ws(args)
         ids = args.get("comment_ids") or []
-        return {"resolved": {cid: cls.comments.resolve(cid) for cid in ids}}
+        resolved = {cid: cls.comments.resolve(cid) for cid in ids}
+        n = sum(1 for ok in resolved.values() if ok)
+        if n:  # skip the event when nothing actually resolved
+            cls.activity.append(
+                "resolved", f"resolved {n} comment{'' if n == 1 else 's'}",
+                {"comments": [cid for cid, ok in resolved.items() if ok]})
+        return {"resolved": resolved}
 
     def canvas_ack(args):
         _, cls = _ws(args)
         decided_at = cls.approval.get().get("decidedAt")
-        return cls.ack.set(decided_at, "Claude", str(args.get("message", "")))
+        message = str(args.get("message", ""))
+        result = cls.ack.set(decided_at, "Claude", message)
+        cls.activity.append("acked", message)
+        return result
 
     def canvas_export(args):
         _, cls = _ws(args)
@@ -286,8 +339,9 @@ def make_tools(registry, assets_dir, base_url):
                 "in the result) — author your pages, then call canvas_open "
                 "again: it launches the reviewer's browser at the first page. "
                 "Share the url with the user only once the pages are authored. "
-                "Returns url, key, pages, seeded, browser_opened, and current "
-                "feedback state.",
+                "Returns url, key, pages (each with file, title, and kind: "
+                "plan|mockup|diagram|decision|doc), seeded, browser_opened, "
+                "and current feedback state.",
             "inputSchema": _dir_schema({
                 "mode": {"type": "string", "enum": ["plan", "canvas"],
                          "description": "plan = gated plan template (default);"
@@ -301,12 +355,13 @@ def make_tools(registry, assets_dir, base_url):
         },
         "canvas_wait": {
             "description":
-                "Block until the reviewer submits feedback (comment to the "
-                "agent, or an approval decision) or the timeout passes. "
-                "Auto-acknowledges approvals. Returns cursor, event "
-                "(comment|approval|null), approval state, open agent-targeted "
-                "comments, and answers. Re-call with the returned cursor as "
-                "`since`.",
+                "Block until the reviewer sends a review batch (one submission "
+                "event covering comments + answers + an optional decision) or "
+                "the timeout passes. Auto-acknowledges the pickup. Returns "
+                "cursor, event (submission|approval|null), approval state, the "
+                "latest submission (refs+at, or null), open reviewer comments "
+                "(sent, unresolved), and answers. Re-call with the returned "
+                "cursor as `since`.",
             "inputSchema": _dir_schema({
                 "since": {"type": "integer",
                           "description": "Event cursor from the previous call "
@@ -325,11 +380,27 @@ def make_tools(registry, assets_dir, base_url):
         },
         "canvas_feedback": {
             "description":
-                "Read a workspace's full review state without blocking: "
-                "comments, answers, approval, ack, and the current event "
-                "cursor.",
+                "Read a workspace's full review state without blocking: open "
+                "reviewer comments, unsent pending drafts (so you can tell the "
+                "reviewer is mid-draft), answers, approval, ack, and the "
+                "current event cursor.",
             "inputSchema": _dir_schema(),
             "fn": canvas_feedback,
+        },
+        "canvas_reply": {
+            "description":
+                "Post a threaded reply (author 'claude', immediately visible) "
+                "under a reviewer comment — for 'done, see the new section 3' "
+                "or a counter-question — instead of burying the response in "
+                "chat. The parent comment must exist. Returns the created "
+                "reply comment.",
+            "inputSchema": _dir_schema(
+                {"comment_id": {"type": "string",
+                                "description": "Id of the comment to reply to."},
+                 "message": {"type": "string",
+                             "description": "The reply body."}},
+                extra_required=("comment_id", "message")),
+            "fn": canvas_reply,
         },
         "canvas_resolve": {
             "description":
@@ -433,14 +504,64 @@ PARSE_ERROR = {"jsonrpc": "2.0", "id": None,
 _WS_ROUTE = re.compile(r"^/w/([A-Za-z0-9._-]+)(/.*)?$")
 
 
+def _index_card(key, ws_dir):
+    """One hub card per registered canvas. Reads the workspace's JSON files
+    best-effort — a broken or half-written workspace must never 500 the hub."""
+    import html
+    d = Path(ws_dir)
+    title, pages_html = key, ""
+    open_count, approval_state = 0, None
+    try:
+        pages = serve._list_pages(d)
+        if pages:
+            title = pages[0]["title"]
+        pages_html = ", ".join(
+            f'{html.escape(p["file"])} <span class="kind">{p["kind"]}</span>'
+            for p in pages)
+    except Exception:
+        pass
+    try:
+        comments = json.loads((d / "comments.json").read_text()).get(
+            "comments", [])
+        open_count = sum(
+            1 for c in comments
+            if c.get("author") != "claude"
+            and (c.get("state")
+                 or ("resolved" if c.get("status") == "resolved" else "sent"))
+            == "sent")
+    except Exception:
+        pass
+    try:
+        approval_state = json.loads(
+            (d / "approval.json").read_text()).get("state")
+    except Exception:
+        pass
+    return (
+        f'<li class="card"><a href="/w/{key}/">{html.escape(title)}</a>'
+        f'<div class="pages">{pages_html}</div>'
+        f'<div class="meta"><span>{open_count} open</span>'
+        f'<span class="approval">{html.escape(approval_state or "no decision")}'
+        f'</span></div>'
+        f'<div class="dir">{html.escape(str(ws_dir))}</div></li>')
+
+
 def _index_html(registry):
-    rows = "".join(
-        f'<li><a href="/w/{key}/">{key}</a> '
-        f'<span style="color:#888">{ws_dir}</span></li>'
-        for key, ws_dir in sorted(registry.items().items()))
+    cards = "".join(_index_card(key, ws_dir)
+                    for key, ws_dir in sorted(registry.items().items()))
+    style = (
+        "body{font:14px system-ui,sans-serif;margin:2rem;color:#222}"
+        "h1{font-size:1.3rem}ul{list-style:none;padding:0;display:grid;"
+        "gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}"
+        ".card{border:1px solid #ddd;border-radius:8px;padding:.75rem 1rem}"
+        ".card a{font-weight:600;text-decoration:none;color:#0b5}"
+        ".pages{color:#555;margin:.35rem 0;font-size:13px}"
+        ".kind{color:#888;font-size:11px}"
+        ".meta{display:flex;gap:1rem;font-size:12px;color:#666}"
+        ".approval{font-weight:600}"
+        ".dir{color:#aaa;font-size:11px;margin-top:.35rem;word-break:break-all}")
     return ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
-            "<title>canvasd</title></head><body>"
-            f"<h1>canvasd</h1><ul>{rows or '<li>no canvases yet</li>'}</ul>"
+            f"<title>canvasd</title><style>{style}</style></head><body>"
+            f"<h1>canvasd</h1><ul>{cards or '<li>no canvases yet</li>'}</ul>"
             "</body></html>")
 
 

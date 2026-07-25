@@ -86,7 +86,8 @@ class InitializeTests(McpEndpointCase):
 
 
 CANVAS_TOOLS = {"canvas_open", "canvas_wait", "canvas_feedback",
-                "canvas_resolve", "canvas_ack", "canvas_export"}
+                "canvas_resolve", "canvas_ack", "canvas_export",
+                "canvas_reply"}
 
 
 class ToolsTests(McpEndpointCase):
@@ -262,8 +263,11 @@ class WorkspaceRoutingTests(WorkspaceRoutingCase):
         (other / "plan.html").write_text("<h1>other</h1>")
         other_key = self.httpd.registry.register(other)
 
+        # A submission on A must not wake B's wait loop.
         _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
-                  {"blockId": "x", "body": "wake A", "target": "agent"})
+                  {"blockId": "x", "body": "wake A"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": None})
 
         _, got_b = _json_req(
             "GET", f"{self.base}/w/{other_key}/api/wait?since=0&timeout=0.1")
@@ -271,7 +275,16 @@ class WorkspaceRoutingTests(WorkspaceRoutingCase):
 
         _, got_a = _json_req(
             "GET", f"{self.base}/w/{self.key}/api/wait?since=0&timeout=0.1")
-        self.assertEqual(got_a["event"], "comment")
+        self.assertEqual(got_a["event"], "submission")
+
+    def test_index_shows_open_count_and_approval(self):
+        _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
+                  {"blockId": "b", "body": "x"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": "approved"})
+        status, body = _get(f"{self.base}/")
+        self.assertEqual(status, 200)
+        self.assertIn("approved", body.decode())
 
 
 # ---------------------------------------------------------------------------
@@ -335,12 +348,14 @@ class CanvasOpenTests(McpToolsCase):
 
     def test_open_surfaces_existing_feedback(self):
         _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
-                  {"blockId": "b", "body": "pending note"})
+                  {"blockId": "b", "body": "sent note"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": None})
         err, out = self.call("canvas_open", {
             "dir": str(self.ws), "open_browser": False})
         self.assertFalse(err)
         bodies = [c["body"] for c in out["feedback"]["comments"]]
-        self.assertIn("pending note", bodies)
+        self.assertIn("sent note", bodies)
 
 
 class CanvasOpenBrowserTests(McpToolsCase):
@@ -404,7 +419,9 @@ class CanvasOpenBrowserTests(McpToolsCase):
 class CanvasFeedbackTests(McpToolsCase):
     def test_feedback_reads_full_state_and_cursor(self):
         _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
-                  {"blockId": "b", "body": "see this", "target": "agent"})
+                  {"blockId": "b", "body": "see this"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": None})
         _json_req("POST", f"{self.base}/w/{self.key}/api/answers",
                   {"questionId": "q1", "mode": "single", "value": "a"})
         err, out = self.call("canvas_feedback", {"dir": str(self.ws)})
@@ -419,15 +436,40 @@ class CanvasFeedbackTests(McpToolsCase):
                              {"dir": str(self.tmp / "no-such-dir")})
         self.assertTrue(err)
 
+    def test_feedback_exposes_pending_drafts_separate_from_comments(self):
+        # A session should see "reviewer is mid-draft" — but drafts live under
+        # 'pending', never mixed into the actionable 'comments' list.
+        _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
+                  {"blockId": "b", "body": "still drafting"})
+        err, out = self.call("canvas_feedback", {"dir": str(self.ws)})
+        self.assertFalse(err)
+        pending_bodies = [c["body"] for c in out["pending"]]
+        self.assertIn("still drafting", pending_bodies)
+        self.assertNotIn("still drafting",
+                         [c["body"] for c in out["comments"]])
+
+    def test_open_feedback_exposes_pending_drafts(self):
+        _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
+                  {"blockId": "b", "body": "draft on open"})
+        err, out = self.call("canvas_open", {
+            "dir": str(self.ws), "open_browser": False})
+        self.assertFalse(err)
+        self.assertIn("draft on open",
+                      [c["body"] for c in out["feedback"]["pending"]])
+        self.assertNotIn("draft on open",
+                         [c["body"] for c in out["feedback"]["comments"]])
+
 
 class CanvasWaitTests(McpToolsCase):
-    def test_wait_returns_buffered_agent_event(self):
+    def test_wait_returns_buffered_submission_event(self):
         _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
-                  {"blockId": "b", "body": "act on this", "target": "agent"})
+                  {"blockId": "b", "body": "act on this"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": "changes-requested"})
         err, out = self.call("canvas_wait", {
             "dir": str(self.ws), "since": 0, "timeout": 0.2})
         self.assertFalse(err)
-        self.assertEqual(out["event"], "comment")
+        self.assertEqual(out["event"], "submission")
         bodies = [c["body"] for c in out["comments"]]
         self.assertIn("act on this", bodies)
 
@@ -462,7 +504,7 @@ class CanvasResolveAckTests(McpToolsCase):
         self.assertTrue(out["resolved"][created["id"]])
         self.assertFalse(out["resolved"]["c-nope"])
         on_disk = json.loads((self.ws / "comments.json").read_text())
-        self.assertEqual(on_disk["comments"][0]["status"], "resolved")
+        self.assertEqual(on_disk["comments"][0]["state"], "resolved")
 
     def test_ack_keys_to_latest_submission(self):
         _json_req("POST", f"{self.base}/w/{self.key}/api/approval",
@@ -474,6 +516,90 @@ class CanvasResolveAckTests(McpToolsCase):
         self.assertEqual(ack["message"], "applied all three")
         approval = json.loads((self.ws / "approval.json").read_text())
         self.assertEqual(ack["decidedAt"], approval["decidedAt"])
+
+
+class CanvasReplyTests(McpToolsCase):
+    def test_reply_threads_under_parent_as_claude(self):
+        _, parent = _json_req(
+            "POST", f"{self.base}/w/{self.key}/api/comments",
+            {"blockId": "b", "blockLabel": "Block B", "body": "please clarify"})
+        err, out = self.call("canvas_reply", {
+            "dir": str(self.ws), "comment_id": parent["id"],
+            "message": "done, see section 3"})
+        self.assertFalse(err)
+        self.assertEqual(out["parentId"], parent["id"])
+        self.assertEqual(out["author"], "claude")
+        self.assertEqual(out["state"], "sent")
+        self.assertEqual(out["blockId"], "b")
+        self.assertEqual(out["blockLabel"], "Block B")
+        self.assertEqual(out["body"], "done, see section 3")
+        events = json.loads(
+            (self.ws / "activity.json").read_text())["events"]
+        self.assertTrue(any(e["kind"] == "replied" for e in events))
+
+    def test_reply_unknown_parent_is_error(self):
+        err, msg = self.call("canvas_reply", {
+            "dir": str(self.ws), "comment_id": "c-nope", "message": "x"})
+        self.assertTrue(err)
+
+
+class CanvasSubmissionWaitTests(McpToolsCase):
+    def test_submission_wakes_wait_and_auto_acks_pickup(self):
+        _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
+                  {"blockId": "b", "body": "do this"})
+        _json_req("POST", f"{self.base}/w/{self.key}/api/submit",
+                  {"decision": "changes-requested", "note": "nits"})
+        err, out = self.call("canvas_wait", {
+            "dir": str(self.ws), "since": 0, "timeout": 0.2})
+        self.assertFalse(err)
+        self.assertEqual(out["event"], "submission")
+        self.assertIsNotNone(out["submission"])
+        # auto-ack pickup keyed to the submitted activity event's timestamp
+        ack = json.loads((self.ws / "ack.json").read_text())
+        self.assertEqual(ack["decidedAt"], out["submission"]["at"])
+        self.assertEqual(ack["by"], "Claude")
+        kinds = [e["kind"] for e in json.loads(
+            (self.ws / "activity.json").read_text())["events"]]
+        self.assertIn("picked-up", kinds)
+        self.assertIn("do this", [c["body"] for c in out["comments"]])
+
+
+class CanvasActivityTests(McpToolsCase):
+    def test_resolve_appends_one_activity(self):
+        _, c = _json_req("POST", f"{self.base}/w/{self.key}/api/comments",
+                         {"blockId": "b", "body": "fix"})
+        self.call("canvas_resolve", {
+            "dir": str(self.ws), "comment_ids": [c["id"], "c-nope"]})
+        events = json.loads((self.ws / "activity.json").read_text())["events"]
+        self.assertEqual(
+            len([e for e in events if e["kind"] == "resolved"]), 1)
+
+    def test_resolving_nothing_appends_no_activity(self):
+        self.call("canvas_resolve", {
+            "dir": str(self.ws), "comment_ids": ["c-nope"]})
+        path = self.ws / "activity.json"
+        events = json.loads(path.read_text())["events"] if path.exists() else []
+        self.assertEqual([e for e in events if e["kind"] == "resolved"], [])
+
+    def test_ack_appends_activity(self):
+        _json_req("POST", f"{self.base}/w/{self.key}/api/approval",
+                  {"state": "approved", "note": "ship"})
+        self.call("canvas_ack", {"dir": str(self.ws), "message": "applied all"})
+        events = json.loads((self.ws / "activity.json").read_text())["events"]
+        self.assertTrue(any(e["kind"] == "acked" and e["summary"] == "applied all"
+                            for e in events))
+
+
+class PageKindTests(McpToolsCase):
+    def test_open_exposes_page_kinds(self):
+        (self.ws / "flow.html").write_text(
+            '<body data-canvas-kind="diagram">flow</body>')
+        err, out = self.call("canvas_open", {
+            "dir": str(self.ws), "open_browser": False})
+        self.assertFalse(err)
+        by_file = {p["file"]: p.get("kind") for p in out["pages"]}
+        self.assertEqual(by_file["plan.html"], "plan")
+        self.assertEqual(by_file["flow.html"], "diagram")
 
 
 class CanvasExportTests(McpToolsCase):

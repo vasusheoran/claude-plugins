@@ -83,14 +83,30 @@ class _JsonFile:
         tmp.replace(self.path)
 
 
+def _state_of(comment):
+    """The comment's lifecycle state, deriving it from a legacy v1 `status`
+    when the v2 `state` field is absent (read-time mapping; never rewrites)."""
+    if "state" in comment:
+        return comment["state"]
+    return "resolved" if comment.get("status") == "resolved" else "sent"
+
+
 class CommentStore(_JsonFile):
     def __init__(self, path):
         super().__init__(path, {"comments": []})
 
     def list(self):
-        return self.read().get("comments", [])
+        # Fill in the derived state for legacy entries at read time; read()
+        # returns a fresh parse each call, so this never touches the file.
+        comments = self.read().get("comments", [])
+        for c in comments:
+            c.setdefault("state", _state_of(c))
+        return comments
 
     def add(self, fields):
+        # Reviewer comments are born pending drafts; claude replies are sent.
+        author = fields.get("author", "human")
+        state = "sent" if author == "claude" else "pending"
         comment = {
             "id": "c-" + secrets.token_hex(6),
             "parentId": fields.get("parentId"),
@@ -101,33 +117,88 @@ class CommentStore(_JsonFile):
             "quote": fields.get("quote"),
             "anchor": fields.get("anchor"),
             "body": fields.get("body", ""),
-            "author": fields.get("author", "human"),
-            "target": fields.get("target", "agent"),
+            "author": author,
             "page": fields.get("page", "plan.html"),
-            "status": "open",
+            "state": state,
             "createdAt": _now(),
         }
+        if state == "sent":
+            comment["sentAt"] = _now()
+        # The retired v1 fields aren't written on new comments, but a legacy
+        # client that still sends them gets them stored (state governs).
+        if "status" in fields:
+            comment["status"] = fields["status"]
+        if "target" in fields:
+            comment["target"] = fields["target"]
         with self._lock:
             data = self.read()
             data.setdefault("comments", []).append(comment)
             self.write(data)
         return comment
 
-    def _set_status(self, comment_id, status):
+    def _set_state(self, comment_id, state, legacy_status):
         with self._lock:
             data = self.read()
             for c in data.get("comments", []):
                 if c["id"] == comment_id:
-                    c["status"] = status
+                    c["state"] = state
+                    if "status" in c:  # keep a stale reader in sync
+                        c["status"] = legacy_status
                     self.write(data)
                     return True
         return False
 
     def resolve(self, comment_id):
-        return self._set_status(comment_id, "resolved")
+        return self._set_state(comment_id, "resolved", "resolved")
 
     def reopen(self, comment_id):
-        return self._set_status(comment_id, "open")
+        # A reopened comment goes back in front of the agent, not to a draft.
+        return self._set_state(comment_id, "sent", "open")
+
+    def edit(self, comment_id, body):
+        """Edit a comment's body — pending drafts only. True if applied."""
+        with self._lock:
+            data = self.read()
+            for c in data.get("comments", []):
+                if c["id"] == comment_id:
+                    if _state_of(c) != "pending":
+                        return False
+                    c["body"] = body
+                    c["editedAt"] = _now()
+                    self.write(data)
+                    return True
+        return False
+
+    def delete(self, comment_id):
+        """Remove a comment — pending drafts only. True if removed."""
+        with self._lock:
+            data = self.read()
+            comments = data.get("comments", [])
+            for i, c in enumerate(comments):
+                if c["id"] == comment_id:
+                    if _state_of(c) != "pending":
+                        return False
+                    del comments[i]
+                    self.write(data)
+                    return True
+        return False
+
+    def submit_pending(self):
+        """Flip every pending draft to sent; return the newly sent comments."""
+        now = _now()
+        sent = []
+        with self._lock:
+            data = self.read()
+            for c in data.get("comments", []):
+                if c.get("state") == "pending":
+                    c["state"] = "sent"
+                    c["sentAt"] = now
+                    if "status" in c:
+                        c["status"] = "open"
+                    sent.append(c)
+            if sent:
+                self.write(data)
+        return sent
 
 
 class AnswerStore(_JsonFile):
@@ -187,6 +258,25 @@ class AckStore(_JsonFile):
         with self._lock:
             self.write(data)
         return data
+
+
+class ActivityStore(_JsonFile):
+    """Server-appended, append-only feed rendered by the browser (bell/feed).
+    Kinds: submitted, picked-up, replied, resolved, page-updated, acked."""
+
+    def __init__(self, path):
+        super().__init__(path, {"events": []})
+
+    def list(self):
+        return self.read().get("events", [])
+
+    def append(self, kind, summary, refs=None):
+        event = {"at": _now(), "kind": kind, "summary": summary, "refs": refs}
+        with self._lock:
+            data = self.read()
+            data.setdefault("events", []).append(event)
+            self.write(data)
+        return event
 
 
 class EventBus:
@@ -289,12 +379,19 @@ CONTENT_TYPES = {
 }
 
 
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_KIND_RE = re.compile(r"<body[^>]*\bdata-canvas-kind=[\"']([a-zA-Z]+)[\"']",
+                      re.IGNORECASE)
+_PAGE_KINDS = {"plan", "mockup", "diagram", "decision", "doc"}
+
+
 def _list_pages(plan_dir):
     """List *.html files directly in plan_dir, plan.html first then alphabetical.
 
-    Returns a list of {"file": name, "title": title_or_filename} dicts.
-    Title is extracted from the first <title>…</title> tag in the file (case-
-    insensitive, whitespace-trimmed); falls back to the filename if absent.
+    Returns a list of {"file", "title", "kind"} dicts. Title comes from the
+    first <title>…</title> tag (falls back to the filename). Kind comes from
+    the <body data-canvas-kind="…"> attribute (one of plan/mockup/diagram/
+    decision/doc); default when absent is "plan" for plan.html, else "doc".
     """
     html_files = sorted(
         p.name for p in plan_dir.iterdir()
@@ -306,15 +403,18 @@ def _list_pages(plan_dir):
         html_files = ["plan.html"] + html_files
 
     pages = []
-    _title_re = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
     for name in html_files:
         try:
-            snippet = (plan_dir / name).read_text(errors="replace")[:4096]
+            snippet = (plan_dir / name).read_text(errors="replace")[:8192]
         except OSError:
             snippet = ""
-        m = _title_re.search(snippet)
+        m = _TITLE_RE.search(snippet)
         title = m.group(1).strip() if m else ""
-        pages.append({"file": name, "title": title or name})
+        km = _KIND_RE.search(snippet)
+        kind = km.group(1).lower() if km else ""
+        if kind not in _PAGE_KINDS:
+            kind = "plan" if name == "plan.html" else "doc"
+        pages.append({"file": name, "title": title or name, "kind": kind})
     return pages
 
 
@@ -324,7 +424,30 @@ def make_handler(plan_dir, assets_dir=None):
     answers = AnswerStore(plan_dir / "answers.json")
     approval = ApprovalStore(plan_dir / "approval.json")
     ack = AckStore(plan_dir / "ack.json")
+    activity = ActivityStore(plan_dir / "activity.json")
     bus = EventBus()
+
+    # Last-seen page digests for server-side page-updated detection. Lazily
+    # initialized on the first /api/version (no event emitted then); a later
+    # poll that sees a digest change appends one page-updated activity event.
+    # Lock-guarded compare-and-set so concurrent polls can't double-append.
+    _pages = {"digests": None}
+    _pages_lock = threading.Lock()
+
+    def _page_digests():
+        return {p.name: _digest(p) for p in plan_dir.glob("*.html")}
+
+    def _detect_page_updates(current):
+        with _pages_lock:
+            prev = _pages["digests"]
+            if prev is None:
+                _pages["digests"] = current
+                return
+            changed = sorted(f for f, d in current.items() if prev.get(f) != d)
+            if changed:
+                _pages["digests"] = current
+                activity.append("page-updated", ", ".join(changed) + " updated",
+                                {"pages": changed})
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -357,13 +480,19 @@ def make_handler(plan_dir, assets_dir=None):
                 return self._json(200, approval.get())
             if path == "/api/ack":
                 return self._json(200, ack.get())
+            if path == "/api/activity":
+                return self._json(200, {"events": activity.list()})
             if path == "/api/version":
+                pages = _page_digests()
+                _detect_page_updates(pages)
                 return self._json(200, {
                     "plan": _digest(plan_dir / "plan.html"),
                     "comments": _digest(plan_dir / "comments.json"),
                     "answers": _digest(plan_dir / "answers.json"),
                     "approval": _digest(plan_dir / "approval.json"),
                     "ack": _digest(plan_dir / "ack.json"),
+                    "activity": _digest(plan_dir / "activity.json"),
+                    "pages": pages,
                 })
             if path == "/api/pages":
                 return self._json(200, {"pages": _list_pages(plan_dir)})
@@ -377,8 +506,9 @@ def make_handler(plan_dir, assets_dir=None):
                 if events_param == "any":
                     kinds = None
                 else:
-                    # "agent" default: comment and approval
-                    kinds = {"comment", "approval"}
+                    # "agent" default: a batch submission or an approval
+                    # decision (the transition path for the old widget).
+                    kinds = {"submission", "approval"}
                 result = bus.wait(since=since, kinds=kinds, timeout=timeout)
                 return self._json(200, result)
             target = safe_path(plan_dir, self.path, assets_dir=assets_dir)
@@ -402,16 +532,42 @@ def make_handler(plan_dir, assets_dir=None):
                 return self._json(400, {"error": "invalid json"})
 
             if path == "/api/comments":
-                comment = comments.add(payload)
-                if comment.get("target") == "agent":
-                    bus.notify("comment")
-                return self._json(201, comment)
+                # Drafts (pending) and claude replies (sent) are both silent:
+                # the batch Send fires the one submission event; the browser
+                # picks up replies by polling /api/version.
+                return self._json(201, comments.add(payload))
             if path.startswith("/api/comments/") and path.endswith("/resolve"):
                 cid = path[len("/api/comments/"):-len("/resolve")]
                 return self._json(200, {"ok": comments.resolve(cid)})
             if path.startswith("/api/comments/") and path.endswith("/reopen"):
                 cid = path[len("/api/comments/"):-len("/reopen")]
                 return self._json(200, {"ok": comments.reopen(cid)})
+            if path.startswith("/api/comments/") and path.endswith("/edit"):
+                cid = path[len("/api/comments/"):-len("/edit")]
+                return self._json(
+                    200, {"ok": comments.edit(cid, payload.get("body", ""))})
+            if path.startswith("/api/comments/") and path.endswith("/delete"):
+                cid = path[len("/api/comments/"):-len("/delete")]
+                return self._json(200, {"ok": comments.delete(cid)})
+            if path == "/api/submit":
+                submitted = comments.submit_pending()
+                decision = payload.get("decision")
+                if decision is not None:
+                    approval.set(decision, payload.get("note", ""))
+                n = len(submitted)
+                summary = f"sent {n} item{'' if n == 1 else 's'}"
+                if decision:
+                    label = {"changes-requested": "changes requested",
+                             "approved": "approved"}.get(decision, decision)
+                    summary += f" — {label}"
+                ev = activity.append(
+                    "submitted", summary,
+                    {"comments": [c["id"] for c in submitted],
+                     "decision": decision})
+                bus.notify("submission")
+                return self._json(200, {"submitted": submitted,
+                                        "submittedAt": ev["at"],
+                                        "approval": approval.get()})
             if path == "/api/answers":
                 answer = answers.upsert(payload)
                 bus.notify("answer")
@@ -434,6 +590,7 @@ def make_handler(plan_dir, assets_dir=None):
     Handler.answers = answers
     Handler.approval = approval
     Handler.ack = ack
+    Handler.activity = activity
     Handler.bus = bus
     return Handler
 

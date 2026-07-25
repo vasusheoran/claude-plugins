@@ -15,6 +15,8 @@
      (shared assets — no copies in the workspace); load diagram.js after
      comments.js only if this plan uses a
      <script type="application/json" data-diagram> spec.
+   - data-canvas-kind="plan" on the body declares this artifact's kind for the
+     tab strip; leave it as plan for this template.
    - For non-plan artifacts (mockup / decide / diagram / doc) start from
      canvas.html instead — same folder, its own tab, no gate.
 -->
@@ -25,7 +27,7 @@
   <title>PLAN TITLE — Canvas</title>
   <link rel="stylesheet" href="plan.css" />
 </head>
-<body>
+<body data-canvas-kind="plan">
   <main class="plan">
 
     <div class="banner">
@@ -92,23 +94,28 @@
       <p>Each genuinely-open decision is an interactive question block — the user
          answers inline and the agent reads it from <code>answers.json</code>.
          Modes: <code>single</code> (radio), <code>multi</code> (checkbox),
-         <code>freeform</code> (textarea). Give a recommended default in the option text.</p>
+         <code>freeform</code> (textarea). Argue for a default in the surrounding
+         prose; options themselves render neutral.</p>
     </section>
 
     <section class="block question" data-block-id="q-datastore"
              data-block-label="Where should state live?"
              data-question-id="datastore" data-question-mode="single">
       <h3>Where should plan state live?</h3>
-      <div class="qopt" data-value="json">Flat JSON files (recommended — simplest, matches serve.py)</div>
-      <div class="qopt" data-value="sqlite">SQLite (only if we need queries later)</div>
+      <p>Flat JSON keeps this simple and matches what <code>serve.py</code>
+         already does; SQLite only earns its keep once queries show up.</p>
+      <div class="qopt" data-value="json">Flat JSON files</div>
+      <div class="qopt" data-value="sqlite">SQLite</div>
     </section>
 
     <p class="wf-muted" style="font-size:13px">
-      Tip: click <strong>💬 Comment</strong> in the nav — or press <strong>C</strong> —
-      then click an element to attach a comment, <strong>Alt-click</strong> any
-      point (e.g. on a diagram/wireframe) to pin one, or select text to quote it.
-      Press <strong>Esc</strong> to leave commenting. Reviewers approve or request
-      changes from the bottom bar.
+      Tip: select text to quote it — no mode needed, a floating
+      <strong>💬 Comment</strong> bubble appears next to the selection. For
+      diagrams and other non-text elements, press <strong>C</strong> (or click
+      <strong>💬 Comment</strong> in the nav) then click an element; <strong>Esc</strong>
+      exits. Comments start as drafts you can edit or delete from the panel;
+      nothing reaches Claude until you press <strong>Send to Claude</strong> in
+      the nav, which also carries the approve / request-changes decision.
     </p>
 
   </main>

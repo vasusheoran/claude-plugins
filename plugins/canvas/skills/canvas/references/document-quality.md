@@ -49,25 +49,29 @@ comments detach.
 
 ## Component-level comments (Comment mode)
 
-The top nav carries the whole review UI, and **Comment mode is the one entry
-point for creating a comment** — you author no comment affordances. The reviewer
-enters it with the nav **💬 Comment** button or by pressing **C**; **Esc** exits.
-The mode is **sticky** — it stays on until Esc, so a reviewer can drop several
-comments in a row. While it's on, the cursor is an inspector-style picker and how
-you interact decides what the comment anchors to:
+The top nav carries the whole review UI, and there are two ways to anchor a
+comment — you author no comment affordances either way.
 
-- **Click** an element → an **element anchor** (snaps to the nearest
-  `data-cmt-id`, else a generated path), outlined like a Figma/Vercel pin.
-- **Alt-click** any point → a **point pin** at those `{x,y}` coords (e.g. on a
-  diagram or wireframe).
-- **Select text** → a **quote** anchored to the selection.
+- **Select text → quote.** Selecting three or more characters inside a block
+  pops a small floating **💬 Comment** bubble next to the selection (the
+  Google Docs pattern); clicking it opens the composer. No mode to enter —
+  this works anywhere prose lives. A page whose own interaction depends on
+  text selection can opt out with `<body data-select-comment="off">`.
+- **Comment mode → click an element.** The reviewer enters it with the nav
+  **💬 Comment** button or by pressing **C**; **Esc** exits. The mode is
+  **sticky** — it stays on until Esc, so a reviewer can drop several comments
+  in a row. While it's on, the cursor is an inspector-style picker; clicking
+  an element anchors to it (snaps to the nearest `data-cmt-id`, else a
+  generated path), outlined like a Figma/Vercel pin. This is how comments
+  land on diagrams, wireframes, and other non-text elements.
 
-With the mode **off**, the review UI touches no artifact events at all — which is
-why interactive mockups are safe to click through without triggering the picker.
-A block with open comments shows a small clickable **count chip** (top-right) that
-jumps to its thread in the panel; that's display/navigation, not a creation
-affordance. If a prototype needs the **C** key for its own behavior, opt out with
-`<body data-comment-key="off">` (the button still works).
+With Comment mode **off** and no text selected, the review UI touches no
+artifact events at all — which is why interactive mockups are safe to click
+through without triggering the picker. A block with open comments shows a
+small clickable **count chip** (top-right) that jumps to its thread in the
+panel; that's display/navigation, not a creation affordance. If a prototype
+needs the **C** key for its own behavior, opt out with
+`<body data-comment-key="off">` (the nav button still works).
 
 **Any element is pickable** — you don't have to tag anything. Tagging is only
 about anchor stability. Give an element a stable `data-cmt-id` (+ optional
@@ -90,12 +94,15 @@ about anchor stability. Give an element a stable `data-cmt-id` (+ optional
 - `data-cmt-label` (optional) — the label shown in the panel; omit it and the
   element's trimmed text is used.
 
-Composer: each comment is either **Add comment** (a note) or **Submit** (sent to
-Claude as an action item). Clicking away closes the composer and keeps whatever
-was typed as a draft. A single **Submit review** records approval — `approved`
-when no open *Submit*-to-Claude comments remain, else `changes-requested`; the
-agent then acknowledges the submission and the nav shows "acknowledged by Claude".
-You author none of this UI.
+Composer: a single **Add** action drops the comment into the panel as a
+**pending** draft, with edit and delete controls — nothing reaches Claude yet.
+The reviewer repeats this for as many comments as they want, in any order,
+editing or deleting drafts freely. Pressing **Send to Claude (N)** in the nav
+opens a popover that bundles the pending comments, the question answers, and
+— on gated pages — an approve / request-changes decision, and submits all of
+it as one event. The comment then moves from pending to sent, and its status
+chip (Pending → Sent → Seen → Replied / Resolved) tracks what Claude has done
+with it. You author none of this UI.
 
 ## Interactive question blocks
 
@@ -109,21 +116,31 @@ near the bottom (see Open questions). Don't scatter questions through a document
          data-block-label="Where should state live?"
          data-question-id="store" data-question-mode="single">
   <h3>Where should state live?</h3>
-  <div class="qopt" data-value="json">Flat JSON (recommended — simplest)</div>
-  <div class="qopt" data-value="sqlite">SQLite (only if we need queries)</div>
+  <p>Flat JSON is simplest and matches what the rest of the code already does;
+     SQLite only earns its keep once we need queries.</p>
+  <div class="qopt" data-value="json">Flat JSON</div>
+  <div class="qopt" data-value="sqlite">SQLite</div>
 </section>
 ```
 
-The widget adds a **"Decide for me"** option to every choice question
-automatically (answer value `"__defer__"` = apply your recommended default) —
-never author it yourself. Clicking a selected option again unselects it
-(`value: null` = open again).
+The widget adds two synthetic rows to every choice question automatically —
+never author them yourself:
+
+- **✎ Other…** — expands an inline textarea; saving stores the typed text as
+  the answer (`value: "__other__"` plus an `otherText` field in
+  `answers.json`).
+- **◇ You decide, Claude** — the existing `"__defer__"` behavior. Claude
+  applies its own recommendation when reading answers.
+
+Clicking a selected option again unselects it (`value: null` = open again).
 
 - `data-question-mode`: `single` (radio), `multi` (checkbox), or `freeform`
   (a textarea is rendered automatically — omit `.qopt` children).
 - `data-question-id` must be unique and stable — answers key off it.
-- Put a **recommended default in the option text** so the user can approve by
-  silence.
+- **Options render neutral.** Don't write "(recommended)" or any other lean
+  into option text — the You-decide row never reveals which way Claude would
+  go, and an option that editorializes undermines that. Put the argument for
+  a default in the prose above the options instead.
 
 ## Tone
 
