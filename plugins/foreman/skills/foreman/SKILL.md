@@ -9,6 +9,10 @@ the session is on a lower-tier model, say so before starting rather than
 silently orchestrating from it. Workers write the code, each visible in its
 own herdr tab (Phase 3).
 
+**First act — label your own tab.** Rename the tab this session runs in so
+the user can tell it from the worker tabs: `herdr pane current` → take the
+`tab_id` → `herdr tab rename <tab_id> orchestrator`.
+
 **Prose rule (all phases):** before writing any prose a human will read —
 plan artifacts, ADRs, handoffs, PR text, doc updates, report-backs — invoke
 the **anti-ai-writing** skill and apply it. Workers inherit the rule: any
@@ -75,7 +79,8 @@ per worker — start it, then move its pane into its own labeled tab:
 
     herdr agent start foreman-<item> --workspace <ws-id> \
         --cwd <project> --no-focus -- \
-        claude --model <haiku|sonnet|opus> "<self-contained prompt>"
+        claude --model <haiku|sonnet|opus> --permission-mode auto \
+        "<self-contained prompt>"
     # → note the pane_id in the result
     herdr pane move <pane_id> --new-tab --label "foreman:<item>" --no-focus
 
@@ -92,9 +97,11 @@ TDD requirement below.
 Monitor with `herdr agent wait foreman-<item> --status idle --timeout <ms>`;
 review output with `herdr agent read foreman-<item> --source visible`
 (`--source recent` can come back empty; `visible` reads the pane as shown);
-follow-ups go via `herdr agent send`. Workers keep the user's normal
-permission mode — if one goes `blocked`, it's waiting on a permission
-prompt: tell the user which tab needs a click rather than working around it.
+follow-ups go via `herdr agent send`. Workers run in **auto mode**
+(`--permission-mode auto` above) so they don't stall on routine permission
+prompts while the user is away. If one still goes `blocked` — the auto-mode
+classifier denied something — tell the user which tab needs a click rather
+than working around it.
 Leave the tab open until the item's diff is reviewed and accepted, then
 `herdr tab close` it.
 
@@ -140,6 +147,27 @@ in herdr on its own. So:
 **TDD is non-negotiable** (user's global rule): behavior-level tests written
 and shown failing first, then minimum implementation, never both in one pass.
 Instruct every worker accordingly and spot-check that they complied.
+
+## Usage limits — park and resume, never stop
+
+A usage or rate limit (yours or a worker's) never ends the run and never
+waits on the user. When one hits:
+
+1. Note where the run stands — items done, dispatched, still pending — so
+   the resume turn doesn't have to reconstruct it.
+2. Park with a background timer: `Bash` `sleep 1800` with
+   `run_in_background: true` (foreground sleep is blocked; the background
+   command re-invokes you when it exits). If the limit message names a reset
+   time, sleep until just past that instead of the default 30 min.
+3. On wake, retry: nudge limited workers with
+   `herdr agent send foreman-<item> "continue"`, respawn any that died,
+   dispatch the next pending items. Still limited? Park again. Repeat until
+   work flows.
+
+Cadence is deliberately loose — 30 min or longer is fine. The goal is that
+when limits reset the run picks itself back up while the user is away, not
+that it resumes on the exact minute. Leave worker tabs open across a park:
+a limited worker resumes with a nudge; it doesn't need a fresh spawn.
 
 ## Phase 4 — Verify & close
 
