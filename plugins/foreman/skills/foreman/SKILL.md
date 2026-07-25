@@ -1,18 +1,19 @@
 ---
-description: Plan a piece of work as a reviewable canvas artifact, get approval, then implement it by delegating work items to Opus/Sonnet subagents under strict TDD, with the main model as orchestrator and reviewer. Use when the user says "plan it out and use opus/sonnet to implement", "/foreman <task>", or any equivalent.
+description: Plan a piece of work as a reviewable canvas artifact, get approval, then implement it by delegating work items to worker Claude sessions (Haiku/Sonnet/Opus) in their own herdr tabs under strict TDD, with the latest top-tier model as orchestrator and reviewer. Use when the user says "plan it out and use opus/sonnet to implement", "/foreman <task>", or any equivalent.
 ---
 
 Run one task through the user's standard plan → approve → delegate → verify
-loop. The main (orchestrating) model plans and reviews; Opus/Sonnet subagents
-write the code. The user's preferred orchestrator is the top-tier session
-model (Fable) — if the session is running on a lower-tier model, say so
-before starting rather than silently orchestrating from it.
+loop. The main session is the **orchestrator**: it plans, dispatches, and
+reviews, and it must run on the latest top-tier model (currently Fable) — if
+the session is on a lower-tier model, say so before starting rather than
+silently orchestrating from it. Workers write the code, each visible in its
+own herdr tab (Phase 3).
 
 **Prose rule (all phases):** before writing any prose a human will read —
 plan artifacts, ADRs, handoffs, PR text, doc updates, report-backs — invoke
-the **anti-ai-writing** skill and apply it. Subagents inherit the rule: any
-subagent prompt that has the agent writing docs or user-facing text must
-include the anti-ai-writing constraints (paste the relevant rules; subagents
+the **anti-ai-writing** skill and apply it. Workers inherit the rule: any
+worker prompt that has the agent writing docs or user-facing text must
+include the anti-ai-writing constraints (paste the relevant rules; workers
 get no chat context). Spot-check their prose output against it in review,
 same as TDD compliance.
 
@@ -45,56 +46,104 @@ Then share the URL and **stop until the canvas reports
 `approval.state == "approved"`** (`canvas_wait`). Apply comment feedback by
 editing the artifact (stable block ids).
 
-## Phase 3 — Implement via subagents (after approval only)
+## Phase 3 — Implement via workers (after approval only)
 
-Split the plan into self-contained work items. For each, spawn an Agent with
-an explicit `model` override:
+Split the plan into self-contained work items. **Every item that edits source
+runs as a worker Claude session in its own herdr tab** — one tab per worker,
+so the user can watch and steer each one live. Never run implementation
+through the in-process Agent tool; that tool is reserved for quick read-only
+helpers (Phase 1 exploration, spot-check reads) whose output only the
+orchestrator needs.
 
-- **sonnet** — mechanical / well-specified items (mirrors, adapters, plumbing,
-  test scaffolds, refactors with a clear contract).
-- **opus** — design-heavy or gnarly items (routing logic, tricky algorithms,
-  cross-file surgery, anything where the contract leaves room for judgment).
+Worker model tiers (pass via `--model`):
 
-Run independent items in parallel (one message, multiple Agent calls). Each
-subagent prompt must contain: the exact files to touch, the contract
+- **haiku** — trivial mechanical items: renames, moves, config plumbing,
+  applying a change the plan already spells out line by line.
+- **sonnet** — well-specified items: mirrors, adapters, test scaffolds,
+  refactors with a clear contract.
+- **opus** — design-heavy or gnarly items: routing logic, tricky algorithms,
+  cross-file surgery, anything where the contract leaves room for judgment.
+
+The orchestrator writes no implementation code: it dispatches, reviews
+worker diffs, resolves conflicts, and re-dispatches items that come back
+wrong.
+
+### Spawning a worker
+
+Mechanics (herdr socket CLI; `herdr agent --help` for details). Two commands
+per worker — start it, then move its pane into its own labeled tab:
+
+    herdr agent start foreman-<item> --workspace <ws-id> \
+        --cwd <project> --no-focus -- \
+        claude --model <haiku|sonnet|opus> "<self-contained prompt>"
+    # → note the pane_id in the result
+    herdr pane move <pane_id> --new-tab --label "foreman:<item>" --no-focus
+
+Find your own workspace id with `herdr pane current`. Do NOT use
+`herdr tab create` + `agent start --tab` — that leaves a stray empty shell
+pane in the tab and ignores the tab's cwd; the start-then-move sequence
+yields a clean single-pane tab. Dispatch independent items in parallel — one
+tab each — and report the tab labels as you spawn them so the user knows
+what's running where. Each worker prompt must be self-contained (workers get
+no chat context): the exact files to touch, the contract
 (inputs/outputs/invariants from the plan), the verification command, and the
-TDD requirement below. Subagents get no chat context — make prompts
-self-contained.
+TDD requirement below.
 
-### Where subagents run
+Monitor with `herdr agent wait foreman-<item> --status idle --timeout <ms>`;
+review output with `herdr agent read foreman-<item> --source visible`
+(`--source recent` can come back empty; `visible` reads the pane as shown);
+follow-ups go via `herdr agent send`. Workers keep the user's normal
+permission mode — if one goes `blocked`, it's waiting on a permission
+prompt: tell the user which tab needs a click rather than working around it.
+Leave the tab open until the item's diff is reviewed and accepted, then
+`herdr tab close` it.
 
-The default venue is the in-process Agent tool. When an item warrants its own
-visible session — it's long-running, the user wants to watch or steer it, or
-it needs an interactive terminal of its own — run it as a Claude session in a
-separate **herdr** tab instead. The orchestrator stays in its own tab; the
-prompt contract, model tiers, and TDD rules are identical in both venues.
+### Agent teams
 
-Mechanics (herdr socket CLI; `herdr agent --help` for details):
+The same visibility rule applies to teams-shaped work. Default to the
+tab-per-worker pattern above; reach for native Claude Code agent teams only
+when their shared task list / mailbox coordination is genuinely required.
 
-    herdr tab create --workspace <ws-id> --cwd <project> \
-        --label "foreman:<item>" --no-focus            # returns the tab id
-    herdr agent start foreman-<item> --tab <tab-id> -- \
-        claude --model <sonnet|opus> "<self-contained prompt>"
+Native teams DO work under herdr, but need a bridge (verified 2026-07-26,
+Claude Code v2.1.206). In tmux teammate mode with no surrounding tmux, the
+team lead creates a **dedicated tmux server**: socket
+`claude-swarm-<lead-pid>` (in `/tmp/tmux-$(id -u)/`), session `claude-swarm`,
+one window `swarm-view` with one split pane per teammate — nothing shows up
+in herdr on its own. So:
 
-Find your own workspace id with `herdr pane current`. Monitor with
-`herdr agent wait foreman-<item> --status idle --timeout <ms>` and review
-output with `herdr agent read foreman-<item>`; follow-ups go via
-`herdr agent send`. Spawned sessions keep the user's normal permission mode —
-if one goes `blocked`, it's waiting on a permission prompt: tell the user
-which tab needs a click rather than working around it. Leave the tab open
-until the item's diff is reviewed and accepted, then `herdr tab close` it;
-report tab labels so the user knows what's running where.
+1. Spawn the team-lead session like any worker (start-then-move recipe) with
+   two extra env vars: `--env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and
+   `--env TERM_PROGRAM=` (blank). The blank matters: herdr panes inherit
+   `TERM_PROGRAM=iTerm.app` from the login terminal, and with it set the
+   lead stops on an interactive iTerm2-vs-tmux picker instead of going
+   straight to tmux. Pass `--teammate-mode tmux` on the `claude` argv.
+2. Once the lead reports teammates started (its status line prints the
+   socket: `View teammates: tmux -L claude-swarm-<pid> a`), open one watch
+   tab for the whole team:
+
+       herdr agent start swarm-view --workspace <ws-id> --no-focus -- \
+           tmux -L claude-swarm-<pid> attach -t claude-swarm
+       herdr pane move <pane_id> --new-tab --label "teams:swarm-view" --no-focus
+
+   Teammates are split panes in that single window, so it's one tab per
+   team, not per teammate. Find the socket with `ls /tmp/tmux-$(id -u)/`
+   (newest `claude-swarm-*`) if you didn't catch the status line. Note the
+   lead's own TUI also lists teammates at the bottom (`⏺ main / ◯ <name>`,
+   the agents panel) — that's an inline viewer inside the lead's screen,
+   not where teammates run; the swarm-view tab is the live side-by-side
+   view.
+3. Cleanup: the swarm server dies with the lead, and the attach pane (and
+   its tab) dies with the server. Stale socket files can linger in
+   `/tmp/tmux-<uid>/` — remove them; if a swarm session outlives its lead,
+   `tmux -L claude-swarm-<pid> kill-server`.
 
 **TDD is non-negotiable** (user's global rule): behavior-level tests written
 and shown failing first, then minimum implementation, never both in one pass.
-Instruct every subagent accordingly and spot-check that they complied.
-
-The orchestrator does not write implementation code; it reviews subagent
-diffs, resolves conflicts, and re-dispatches items that came back wrong.
+Instruct every worker accordingly and spot-check that they complied.
 
 ## Phase 4 — Verify & close
 
-- Run the full relevant test suites yourself (don't trust subagent claims).
+- Run the full relevant test suites yourself (don't trust worker claims).
 - Compare results against the plan's gates/artifacts; report honestly,
   including failures and skipped items.
 - Decisions that shaped the outcome → dated ADR (append-only, supersede never
