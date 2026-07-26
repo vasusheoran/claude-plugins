@@ -13,6 +13,42 @@ own herdr tab (Phase 3).
 the user can tell it from the worker tabs: `herdr pane current` → take the
 `tab_id` → `herdr tab rename <tab_id> orchestrator`.
 
+## Stop requests — outrank everything
+
+A user message asking to stop, pause, abort, or kill the run is handled
+before anything else in that turn: the interrupts are the first tool calls
+— no status summary first — and they override an in-progress dispatch or
+limit park. Keep a roster so a stop needs no discovery: on every spawn,
+append `<item> foreman-<item> <pane_id> <tab_id>` to `foreman-workers.txt`
+in the session scratchpad; a stop pass walks the roster (`herdr agent list`
+is the fallback if it's missing).
+
+Two levels:
+
+- **stop / pause** — `herdr pane send-keys <pane_id> Escape` to every
+  worker. Turns interrupt mid-flight; sessions and tabs stay alive. Resume
+  later with `herdr pane run <pane_id> "continue"`.
+- **abort / kill** — Escape every worker, then `herdr tab close <tab_id>`
+  each. Partial diffs stay uncommitted in the worktree for review.
+
+After either, tell the user what was stopped and what was in flight, then
+stand by.
+
+## Delegation map
+
+Three mechanisms, one rule each:
+
+- **In-process subagents** (Agent tool: Explore, general-purpose) — research,
+  exploration, spot-check reads. Findings return straight into orchestrator
+  context: no tab, no session-startup cost, nothing to scrape back. Never
+  for source edits.
+- **Herdr-tab workers** — anything that edits source, except the trivial-edit
+  carve-out in Phase 3. One tab per item, visible and steerable.
+- **Native agent teams** — only when workers must coordinate with *each
+  other* mid-flight (shared task list / mailbox, e.g. two agents negotiating
+  an interface both build against). If the orchestrator can sequence the
+  items instead, it should — the orchestrator is the coordinator.
+
 **Prose rule (all phases):** before writing any prose a human will read —
 plan artifacts, ADRs, handoffs, PR text, doc updates, report-backs — invoke
 the **anti-ai-writing** skill and apply it. Workers inherit the rule: any
@@ -26,6 +62,17 @@ same as TDD compliance.
 Read the real files before writing a word of plan. Name actual files, symbols,
 data shapes; never invent them. Delegate wide exploration to an Explore
 subagent when useful. Make **no source edits** until approval.
+
+**Underspecified task? Brainstorm before planning.** If the goal or approach
+is genuinely open — the request names an outcome but not what to build —
+invoke the **superpowers:brainstorming** skill for its dialogue: clarify
+purpose, constraints, and success criteria one question at a time, propose
+2–3 approaches with a recommendation, YAGNI ruthlessly. Use only that
+dialogue, then stop: the agreed design feeds the Phase 2 canvas plan, which
+replaces brainstorming's own artifacts and gates — do not write
+`docs/superpowers/specs/` files, do not run its spec-review loop, and do
+not invoke writing-plans. A task that arrives well-specified (clear
+contract, known shape) skips this step.
 
 ## Phase 2 — Plan on canvas
 
@@ -68,9 +115,15 @@ Worker model tiers (pass via `--model`):
 - **opus** — design-heavy or gnarly items: routing logic, tricky algorithms,
   cross-file surgery, anything where the contract leaves room for judgment.
 
-The orchestrator writes no implementation code: it dispatches, reviews
-worker diffs, resolves conflicts, and re-dispatches items that come back
-wrong.
+When torn between two tiers, take the lower one and escalate only if the
+item comes back wrong — a redo on sonnet costs less than defaulting to opus.
+
+The orchestrator dispatches, reviews worker diffs, resolves conflicts, and
+re-dispatches items that come back wrong. One exception to "the orchestrator
+writes no code": an item the plan already spells out exactly — a rename, a
+one-liner, a config value — is applied directly by the orchestrator, because
+a worker spawn pays a full session startup that dwarfs such an edit.
+Anything with room for judgment still goes to a worker tab.
 
 ### Spawning a worker
 
@@ -80,9 +133,19 @@ per worker — start it, then move its pane into its own labeled tab:
     herdr agent start foreman-<item> --workspace <ws-id> \
         --cwd <project> --no-focus -- \
         claude --model <haiku|sonnet|opus> --permission-mode auto \
-        "<self-contained prompt>"
+        --setting-sources user,local "<self-contained prompt>"
     # → note the pane_id in the result
     herdr pane move <pane_id> --new-tab --label "foreman:<item>" --no-focus
+    # → append "<item> foreman-<item> <pane_id> <tab_id>" to the stop roster
+
+`--setting-sources user,local` drops the project CLAUDE.md from each worker
+(a large per-spawn token load; verified 2026-07-26) while keeping
+subscription OAuth and the local auto-mode/permission rules. Do NOT use
+`--bare` for this — it disables OAuth entirely and the worker starts logged
+out. Consequence: the worker prompt must carry every repo rule the item
+touches (TDD, gates, conventions, verification command) — which it already
+must, since workers get no chat context. Give each worker only its item's
+slice of the plan, never the whole plan.
 
 Find your own workspace id with `herdr pane current`. Do NOT use
 `herdr tab create` + `agent start --tab` — that leaves a stray empty shell
@@ -94,10 +157,14 @@ no chat context): the exact files to touch, the contract
 (inputs/outputs/invariants from the plan), the verification command, and the
 TDD requirement below.
 
-Monitor with `herdr agent wait foreman-<item> --status idle --timeout <ms>`;
-review output with `herdr agent read foreman-<item> --source visible`
-(`--source recent` can come back empty; `visible` reads the pane as shown);
-follow-ups go via `herdr agent send`. Workers run in **auto mode**
+Monitor with `herdr agent wait foreman-<item> --status idle --timeout <ms>`
+— waiting costs nothing; don't poll with reads. Review the *work* via
+`git diff`, never by reading the transcript; read the pane only to
+spot-check TDD compliance or prose rules, capped
+(`herdr agent read foreman-<item> --source visible --lines 60`;
+`--source recent` can come back empty). Follow-ups go via
+`herdr pane run <pane_id> "<text>"` — `agent send` types text without
+pressing Enter, so a send-only nudge never lands. Workers run in **auto mode**
 (`--permission-mode auto` above) so they don't stall on routine permission
 prompts while the user is away. If one still goes `blocked` — the auto-mode
 classifier denied something — tell the user which tab needs a click rather
@@ -160,9 +227,10 @@ waits on the user. When one hits:
    command re-invokes you when it exits). If the limit message names a reset
    time, sleep until just past that instead of the default 30 min.
 3. On wake, retry: nudge limited workers with
-   `herdr agent send foreman-<item> "continue"`, respawn any that died,
-   dispatch the next pending items. Still limited? Park again. Repeat until
-   work flows.
+   `herdr pane run <pane_id> "continue"`, respawn any that died, dispatch
+   the next pending items. Resume from the state note — don't re-read
+   files or diffs already reviewed. Still limited? Park again. Repeat
+   until work flows.
 
 Cadence is deliberately loose — 30 min or longer is fine. The goal is that
 when limits reset the run picks itself back up while the user is away, not
