@@ -58,6 +58,16 @@
       "category": "productivity",
       "source": "./plugins/writing",
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/writing"
+    },
+    {
+      "name": "git",
+      "description": "Day-to-day git workflow skills — git:rebase, git:sync, git:branch, git:pr, git:cleanup. Each resolves per-repo context (integration branch, fork vs direct, remotes) from git-config overrides with auto-detection, and enforces shared safety rails.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": "./plugins/git",
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/git"
     }
   ]
 }

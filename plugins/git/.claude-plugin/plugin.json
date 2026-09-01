@@ -1,0 +1,8 @@
+{
+  "name": "git",
+  "description": "Day-to-day git workflow skills — rebase, sync, branch, pr, cleanup. Each resolves per-repo context (integration branch, fork vs direct, remotes) from git-config overrides with auto-detection, and enforces shared safety rails (no bare force-push, never rewrite the integration branch).",
+  "author": {
+    "name": "Vasu Sheoran",
+    "email": "vasusheoran92@gmail.com"
+  }
+}
