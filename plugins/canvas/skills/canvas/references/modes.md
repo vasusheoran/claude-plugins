@@ -28,18 +28,27 @@ direction before code**. Skip trivial, unambiguous work — typos, one-line fixe
 a single well-specified function — and just make the change. Never pad a plan
 with filler; never ship a single-step plan.
 
-**Contains.** The full plan structure from `document-quality.md`:
-outcome & scope → approach → architecture → key changes → risks & verification →
-open questions. Diagrams via the div kit or hand-authored SVG; wireframes for
-UI plans. The body carries `data-canvas-kind="plan"` (already set in
-`template.html`).
+**Contains.** Two pages by default (full recipe: Plan-mode structure in
+`document-quality.md`). `plan.html` — gated, one 1080p screen when possible,
+never more than ~2: a 3–6 sentence summary (at most one compact table), then
+every open decision as a numbered question block near the top, then a short
+block naming what approval unblocks. `details.html` — ungated `doc` kind,
+copied from `canvas.html`, linked from plan.html's banner: everything that
+justifies the plan (outcome & scope, approach, architecture, key changes,
+rollout & verification, risks). Diagrams via the div kit or hand-authored SVG
+and wireframes for UI plans go in `details.html`. plan.html's body carries
+`data-canvas-kind="plan"` (already set in `template.html`); the gate stays on
+plan.html only. A plan whose supporting design fits the one-screen budget can
+stay a single page.
 
-**Start from** `template.html`, copied to `plan.html`. **Read**
-`document-quality.md` before the body, `wireframe.md` before any UI screen,
-`svg-diagrams.md` before any hand-authored diagram.
+**Start from** `template.html`, copied to `plan.html`; copy `canvas.html` to
+`details.html` for the supporting design. **Read** `document-quality.md` before
+the body, `wireframe.md` before any UI screen, `svg-diagrams.md` before any
+hand-authored diagram.
 
-**Done** when the plan stands alone, every open decision is settled or a question
-block, and `approval.json` reads `"approved"`.
+**Done** when plan.html fits the screen budget, the pair stands alone, every
+open decision is settled or a question block, and `approval.json` reads
+`"approved"`.
 
 ### Plan discipline (do this before authoring)
 
@@ -60,7 +69,7 @@ block, and `approval.json` reads `"approved"`.
   options in the plan. Ask a clarifying question only when an ambiguity would
   change the design and you can't resolve it from the code; batch 2–4 via the
   normal ask-user-question flow. Otherwise state the assumption and proceed, and
-  keep anything unresolved in the single bottom **Open questions** block. Argue
+  keep anything unresolved as a question block on `plan.html`. Argue
   the default in prose — options render neutral, so don't put the lean in the
   option text.
 - **The plan stands alone.** A reviewer opening it cold — no chat history —
@@ -73,7 +82,8 @@ block, and `approval.json` reads `"approved"`.
 **High-stakes plans** (architecture, backend, data-model, migration, multi-file)
 get one cheap adversarial self-review pass *after* surfacing, while the user
 reads — look for implicit hard-to-reverse decisions, unanchored steps,
-option-menus that should commit to one choice, and filler. Apply clear-cut fixes;
+option-menus that should commit to one choice, filler, and detail that crept
+onto `plan.html` past its screen budget. Apply clear-cut fixes;
 route genuine judgment calls into the Open questions block.
 
 ---

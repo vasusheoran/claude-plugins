@@ -1,7 +1,12 @@
 <!DOCTYPE html>
 <!--
   canvas plan-mode scaffold. Copy to canvas/<slug>/plan.html and replace the
-  content. This is the plan mode — it carries the approval gate.
+  content. This is the gated decisions page — keep it to ONE 1080p screen when
+  possible (never more than ~2): summary, question blocks, ask block, done.
+  Everything that justifies the plan — architecture, diagrams, file trees,
+  annotated code, config/rule sketches, risks, rollout — goes in details.html
+  (copy assets/canvas.html, kind "doc", ungated), linked from the banner below.
+  Full recipe: references/document-quality.md, "Plan-mode structure".
   Rules:
    - Every reviewable section is <section class="block" data-block-id="..."
      data-block-label="">  so it can be commented on.
@@ -12,11 +17,10 @@
      genuinely needs it — two invariants: keep comments.js loaded (below) and
      don't remove/renumber anchored elements (data-block-id / data-cmt-id).
    - plan.css / comments.js / diagram.js are served by the canvasd daemon
-     (shared assets — no copies in the workspace); load diagram.js after
-     comments.js only if this plan uses a
-     <script type="application/json" data-diagram> spec.
+     (shared assets — no copies in the workspace).
    - data-canvas-kind="plan" on the body declares this artifact's kind for the
-     tab strip; leave it as plan for this template.
+     tab strip; leave it as plan for this template. The approval gate renders
+     here and only here — details.html keeps data-approval="off".
    - For non-plan artifacts (mockup / decide / diagram / doc) start from
      canvas.html instead — same folder, its own tab, no gate.
 -->
@@ -33,95 +37,50 @@
     <div class="banner">
       <span class="status draft">DRAFT — awaiting review</span>
       <span>Created 2026-06-18</span>
-      <span>Author: Claude</span>
       <span>Touches: path/to/area</span>
+      <span>Full design: <a href="details.html">Details</a> tab</span>
     </div>
 
-    <h1>PLAN TITLE</h1>
+    <h1>PLAN TITLE — N decisions, then I build</h1>
 
-    <section class="block" data-block-id="outcome" data-block-label="Outcome &amp; scope">
-      <h2>Outcome</h2>
-      <p>One paragraph: what "done" means, who it's for. State the objective and
-         the smallest first cut. <strong>In scope:</strong> … <strong>Non-goals:</strong> …</p>
+    <section class="block" data-block-id="summary" data-block-label="Summary">
+      <p>3–6 sentences: what's being built, the genuinely new part, how it ends
+         (the verification). At most one compact table below; anything longer
+         belongs in details.html.</p>
+      <table>
+        <thead><tr><th>Piece</th><th>How</th><th>New?</th></tr></thead>
+        <tbody>
+          <tr><td>1 · thing</td><td>mechanism, one clause</td><td>rule only</td></tr>
+          <tr><td>2 · thing</td><td>mechanism, one clause</td><td>new container</td></tr>
+        </tbody>
+      </table>
     </section>
 
-    <section class="block" data-block-id="approach" data-block-label="Approach">
-      <h2>Approach</h2>
-      <p>Lead with reuse — what existing files/symbols this builds on — then the new delta.</p>
-      <div class="callout decision">
-        <span class="label">Decision</span>
-        A settled, hard-to-reverse choice committed to in this plan, with rationale.
-      </div>
-    </section>
-
-    <section class="block" data-block-id="architecture" data-block-label="Architecture">
-      <h2>Architecture</h2>
-      <div class="diagram">
-        <div class="row">
-          <div class="node"><div class="t">Browser</div><div class="s">plan.html</div></div>
-          <div class="arrow">→</div>
-          <div class="node"><div class="t">serve.py</div><div class="s">/api/comments</div></div>
-          <div class="arrow">→</div>
-          <div class="node"><div class="t">comments.json</div><div class="s">on disk</div></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="block" data-block-id="changes" data-block-label="Key changes">
-      <h2>Key changes</h2>
-      <div class="file-tree">
-        <div><span class="add">+ path/new_file.py</span> — what it adds</div>
-        <div><span class="mod">~ path/existing.py</span> — what changes</div>
-      </div>
-      <div class="annotated">
-        <pre>def handler(req):
-    return ok(req)</pre>
-        <div class="notes">
-          <div class="note-item"><span class="ln">L1</span> why this signature</div>
-          <div class="note-item"><span class="ln">L2</span> reuses existing ok()</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="block" data-block-id="risks" data-block-label="Risks &amp; verification">
-      <h2>Risks &amp; verification</h2>
-      <div class="callout risk"><span class="label">Risk</span> What could go wrong + mitigation.</div>
-      <p>End-to-end check that exercises the real workflow (not just unit tests).</p>
-    </section>
-
-    <section class="block" data-block-id="open-questions" data-block-label="Open questions">
-      <h2>Open questions</h2>
-      <p>Each genuinely-open decision is an interactive question block — the user
-         answers inline and the agent reads it from <code>answers.json</code>.
-         Modes: <code>single</code> (radio), <code>multi</code> (checkbox),
-         <code>freeform</code> (textarea). Argue for a default in the surrounding
-         prose; options themselves render neutral.</p>
-    </section>
-
+    <!-- One numbered question block per open decision — the page's payload,
+         kept up here, never parked at the bottom. Argue the lean in the prose;
+         options render neutral. Modes: single (radio), multi (checkbox),
+         freeform (textarea, no .qopt children). Answers land in answers.json. -->
     <section class="block question" data-block-id="q-datastore"
              data-block-label="Where should state live?"
              data-question-id="datastore" data-question-mode="single">
-      <h3>Where should plan state live?</h3>
+      <h3>1 · Where should plan state live?</h3>
       <p>Flat JSON keeps this simple and matches what <code>serve.py</code>
          already does; SQLite only earns its keep once queries show up.</p>
       <div class="qopt" data-value="json">Flat JSON files</div>
       <div class="qopt" data-value="sqlite">SQLite</div>
     </section>
 
-    <p class="wf-muted" style="font-size:13px">
-      Tip: select text to quote it — no mode needed, a floating
-      <strong>💬 Comment</strong> bubble appears next to the selection. For
-      diagrams and other non-text elements, press <strong>C</strong> (or click
-      <strong>💬 Comment</strong> in the nav) then click an element; <strong>Esc</strong>
-      exits. Comments start as drafts you can edit or delete from the panel;
-      nothing reaches Claude until you press <strong>Send to Claude</strong> in
-      the nav, which also carries the approve / request-changes decision.
-    </p>
+    <section class="block" data-block-id="ask" data-block-label="What approval unblocks">
+      <p>One short block: what starts on approval — the files/areas touched,
+         anything needed from the reviewer (a token, an account), and how the
+         work runs. The Approve / Request-changes bar is injected automatically
+         on this page.</p>
+    </section>
 
   </main>
   <script src="comments.js"></script>
-  <!-- Uncomment when a diagram spec (<script type="application/json" data-diagram>)
-       is used above; must load after comments.js: -->
+  <!-- Load diagram.js after comments.js only on a page that uses a
+       <script type="application/json" data-diagram> spec (usually details.html): -->
   <!-- <script src="diagram.js"></script> -->
 </body>
 </html>

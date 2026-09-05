@@ -108,8 +108,9 @@ with it. You author none of this UI.
 
 Author each genuinely-open decision as an **interactive question block** so the
 user answers in the page; answers land in `answers.json` for you to read. In a
-**decide** artifact these are the primary surface; in a **plan** they collect
-near the bottom (see Open questions). Don't scatter questions through a document.
+**decide** artifact these are the primary surface; in a **plan** they sit near
+the top of the gated page, right after the summary (see Plan-mode structure).
+Don't scatter questions through a document.
 
 ```html
 <section class="block question" data-block-id="q-store"
@@ -162,28 +163,54 @@ globally — don't patch one artifact's markup.
 
 # Plan-mode structure
 
-Applies to **plan** artifacts only. Lead with **outcome**, then approach, then
-mechanics. A good order:
+Applies to **plan** artifacts only. A plan is **two pages**: a one-screen gated
+`plan.html` carrying the decisions, and an ungated `details.html` carrying the
+design that justifies them. The reviewer's job on `plan.html` is
+answer-and-approve; reading everything is opt-in via the Details tab.
 
-1. **Outcome & scope** — what "done" means, who it's for, the smallest first
-   cut. State in-scope *and* explicit non-goals.
-2. **Approach** — lead with reuse (existing files/symbols), then the new delta.
-   Put settled choices in a `callout decision`.
-3. **Architecture** — only if relationships need a spatial explanation. One
-   diagram per decision; prefer grouped regions / layers / before-after panels
-   over a single left-to-right chain.
-4. **Key changes** — file tree + annotated code for the genuinely new/changed
-   parts. Don't exhaustively list every file.
-5. **Risks & verification** — `callout risk` for what could go wrong + an
-   end-to-end check that exercises the real workflow, not just unit tests.
-6. **Open questions** — a single block at the **bottom**, built from interactive
-   question blocks (above). Never scatter questions through the plan.
+## plan.html — the gated page (decisions)
+
+Budget: one 1080p screen when possible; past ~2 screens, content moves to
+`details.html`. Question blocks count toward the budget — prose doesn't get to
+crowd them out. The page is, in order:
+
+1. **Banner** — status, date, and a link to the details page:
+   `<span>Full design: <a href="details.html">Details</a> tab</span>`.
+2. **Title** — names the ask: "X — 3 decisions, then I build".
+3. **Summary block** — 3–6 sentences: what's being built, the genuinely new
+   part, how it ends. At most one compact table.
+4. **Question blocks** — every open decision, numbered, near the top; each
+   argues the lean in its prose (options render neutral). This is the page's
+   payload — never park it at the bottom.
+5. **Ask block** — one short block: what approval unblocks — files/areas
+   touched, anything needed from the reviewer, how the work runs.
+
+That's the whole page. Architecture, diagrams, file trees, annotated code,
+config/rule sketches, risk registers, and rollout plans render on
+`details.html`, not here. A risk that argues a question's lean is one sentence
+in that question's prose; the register stays in details.
+
+## details.html — the ungated page (supporting design)
+
+Copy `assets/canvas.html` → `details.html` — it already carries
+`data-canvas-kind="doc"` and `data-approval="off"`. Its banner points back:
+"SUPPORTING DETAIL — decisions live on the Plan tab". Order: **outcome &
+scope** (done-means, non-goals) → **approach** (lead with reuse, settled
+choices in `callout decision`) → **architecture** (one diagram per decision) →
+**key changes** (file tree + annotated code) → **rollout & verification**
+(end-to-end check, not just unit tests) → **risks** (`callout risk`). Comments
+left here land in the same **Send to Claude** bundle as plan.html's.
+
+A plan whose entire supporting design fits inside the one-screen budget can
+stay a single `plan.html` — the split protects the decisions, it isn't
+ceremony.
 
 For complex plans, do a final pass: any undecided architecture, scope, UX, data
-shape, rollout, or ownership question must either be decided in the plan (with
-rationale) or appear as a question block with a recommended default.
+shape, rollout, or ownership question is either decided in `details.html` (with
+rationale) or a question block on `plan.html` with the lean argued in prose —
+and `plan.html` still fits the budget.
 
 The reviewer's **Approve / Request changes** decision (the approval gate) is a
 fixed bar injected automatically — you don't author it; you read its result from
-`approval.json`. It applies to plan-mode pages (and any artifact where you drop
-`data-approval="off"`); non-gated artifacts declare `<body data-approval="off">`.
+`approval.json`. It renders on `plan.html` only: `details.html` and other
+non-gated artifacts declare `<body data-approval="off">`.
