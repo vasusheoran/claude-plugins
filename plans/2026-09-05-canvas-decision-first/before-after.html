@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Before / after — yesterday's plan, redone</title>
+  <link rel="stylesheet" href="plan.css" />
+  <link rel="stylesheet" href="proto.css" />
+</head>
+<body data-canvas-kind="doc" data-approval="off" data-budget-words="200">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status">DEMO — real content, proposed format</span>
+      <span>Source: bastion <code>canvas/tamper-cooldown-reconcile</code> (2026-09-04)</span>
+    </div>
+
+    <h1>Yesterday's tamper plan, redone</h1>
+
+    <section class="block" data-block-id="delta" data-block-label="Delta">
+      <div class="delta">
+        <div class="side">
+          <div class="t">before</div>
+          <div class="n">1,060 words</div>
+          <div class="s">12 blocks · ~4 screens before the questions</div>
+        </div>
+        <div class="arr">→</div>
+        <div class="side after">
+          <div class="t">after</div>
+          <div class="n">~190 visible</div>
+          <div class="s">1 screen · every fact kept, collapsed</div>
+        </div>
+      </div>
+    </section>
+
+    <hr style="border:0;border-top:1px solid var(--line);margin:26px 0" />
+
+    <div class="banner">
+      <span class="status done">IMPLEMENTED — 2026-09-04</span>
+      <span>Touches: control-plane (Go) · pwa</span>
+    </div>
+
+    <h1>Tamper cooldown reconcile — 2 decisions</h1>
+
+    <section class="block" data-block-id="verdict" data-block-label="Verdict">
+      <div class="verdict">
+        <div class="chip"><span class="k">bug</span><span class="v">"Apps paused" sticks after unlock</span></div>
+        <div class="chip"><span class="k">cause</span><span class="v">stale cooldown kept when beat omits it</span></div>
+        <div class="chip accent"><span class="k">fix</span><span class="v">reconcile every iOS beat</span></div>
+        <div class="chip"><span class="k">ships</span><span class="v">server-only · fixes live 1.1 + 1.2</span></div>
+      </div>
+      <details class="why"><summary>root cause</summary>
+        <p>The device already clears its hold correctly: during a hold every beat
+           carries <code>cooldown_deadline</code>; the instant it ends the field is
+           omitted. <code>enrollment.go:713</code> treats absence as "keep the stored
+           value", so the stale deadline survives until natural expiry and the
+           dashboard keeps showing paused + Unlock now.</p>
+        <table>
+          <thead><tr><th>iOS beat reports</th><th>Server does</th></tr></thead>
+          <tbody>
+            <tr><td><code>dns_enabled: false</code></td><td>violation (existing path)</td></tr>
+            <tr><td><code>dns_enabled: true</code> + deadline</td><td>set the deadline</td></tr>
+            <tr><td><code>dns_enabled: true</code>, field absent</td><td><strong>clear the deadline</strong></td></tr>
+          </tbody>
+        </table>
+      </details>
+    </section>
+
+    <section class="block question dcard" data-block-id="q-unlock-writer"
+             data-block-label="Unlock NULL-write" data-question-id="unlock_writer_demo"
+             data-question-mode="single">
+      <h3>1 · Unlock endpoint's NULL-write: keep or drop?</h3>
+      <div class="lean">Drop — the device becomes the single writer.</div>
+      <details class="why"><summary>why</summary>
+        <p><code>tamper_lock.go:132</code> writes <code>cooldown_deadline = NULL</code> on
+           unlock. Redundant once the next authoritative beat reconciles; keeping it
+           is a harmless optimistic clear the beat confirms anyway.</p>
+      </details>
+      <div class="qopt" data-value="drop">Drop — device is the single writer</div>
+      <div class="qopt" data-value="keep">Keep as an optimistic clear</div>
+    </section>
+
+    <section class="block question dcard" data-block-id="q-pwa-scope"
+             data-block-label="PWA pending" data-question-id="pwa_scope_demo"
+             data-question-mode="single">
+      <h3>2 · PWA "pending" flash: this batch or follow-up?</h3>
+      <div class="lean">Include — refresh during the ack window still flashes paused.</div>
+      <details class="why"><summary>why</summary>
+        <p>With the reconcile the banner self-heals within a beat, but the pending
+           state is click-local, so a refresh loses it. Deriving it from
+           <code>unlock_at</code> vs the device ack makes it refresh-safe.</p>
+      </details>
+      <div class="qopt" data-value="include">Include the refresh-safe pending</div>
+      <div class="qopt" data-value="followup">Go reconcile only; PWA follow-up</div>
+    </section>
+
+    <section class="block" data-block-id="settled" data-block-label="Settled">
+      <h3>Settled</h3>
+      <div class="settled">
+        <details><summary><code>screen_time_authorized</code> keeps its keep-on-absent debounce</summary>
+          <div>Deliberately omitted on racy launches (<code>MonitorHeartbeat.swift:155</code>)
+               so the server retains the last good value. "Never keep" applies to
+               <code>cooldown_deadline</code> only.</div>
+        </details>
+        <details><summary>iOS-only; Windows/Android untouched, test asserts it</summary>
+          <div>Non-iOS beats carry no tamper fields; their columns stay NULL. Separate
+               check, not this fix: confirm iPad enrolls as <code>platform:"ios"</code>
+               (<code>enrollment.go:726</code>).</div>
+        </details>
+        <details><summary>Converges in one beat; worst-case self-expiry ≤30 min</summary>
+          <div>A late in-flight beat can re-set the old deadline; the next beat clears
+               it. Applies to host-app and monitor beats alike — both mirror
+               <code>TamperStore</code>, no gating on <code>source</code>.</div>
+        </details>
+        <details><summary>Verify: Go + PWA suites + device loop on the cabled Air</summary>
+          <div>Tamper → cooldown → parent Unlock → dashboard unlocks and stays across
+               refresh. No new iOS build needed — the live build already omits the
+               field on clear.</div>
+        </details>
+        <details><summary>Rollout: merge → prod; ADR 0047 verdict; explicit-null encode deferred</summary>
+          <div>Server-only, so field phones fix immediately. iOS
+               <code>encodeIfPresent</code> → <code>encode</code> hardening files as a
+               follow-up for the next App Store build.</div>
+        </details>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="ask" data-block-label="What approval unblocks">
+      <p>Approve → worktree, TDD (Go + PWA per question 2), device-verified on the
+         cabled Air. No prod deploy without go-ahead.</p>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script src="proto.js"></script>
+</body>
+</html>

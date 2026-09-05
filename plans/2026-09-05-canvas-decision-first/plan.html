@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canvas decision-first — Spec</title>
+  <link rel="stylesheet" href="plan.css" />
+  <link rel="stylesheet" href="proto.css" />
+</head>
+<body data-canvas-kind="plan" data-budget-words="200">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status">DESIGN SPEC — 2026-09-05</span>
+      <span>Touches: canvas skill only</span>
+      <span>Redone real plan: <a href="before-after.html">Before/after</a> tab</span>
+    </div>
+
+    <h1>Canvas, decision-first — 3 decisions</h1>
+
+    <section class="block" data-block-id="verdict" data-block-label="Verdict">
+      <div class="verdict">
+        <div class="chip"><span class="k">problem</span><span class="v">plans read 600–1,400 words</span></div>
+        <div class="chip accent"><span class="k">fix</span><span class="v">cards · collapse · meter</span></div>
+        <div class="chip"><span class="k">scope</span><span class="v">all 5 modes</span></div>
+        <div class="chip"><span class="k">this page</span><span class="v">dogfoods the format</span></div>
+      </div>
+      <p style="font-size:13px;color:var(--muted)">Meter bottom-right is live; ▸ expands budget-free.</p>
+    </section>
+
+    <section class="block question dcard" data-block-id="q-budget"
+             data-block-label="Visible-word budget"
+             data-question-id="budget" data-question-mode="single">
+      <h3>1 · Visible-word budget for decision pages</h3>
+      <div class="lean">200 — forces chips and tables, still fits three cards.</div>
+      <details class="why"><summary>why</summary>
+        <p>One 1080p screen of plan.css type holds ~250–300 words including chrome.
+           Collapsed text is budget-free, so nothing is deleted — yesterday's
+           tamper plan (1,060 words) redoes at ~190 visible with every fact kept
+           (<a href="before-after.html">see it</a>).</p>
+        <table>
+          <thead><tr><th>Mode</th><th>Default budget (visible words)</th></tr></thead>
+          <tbody>
+            <tr><td>plan / decide</td><td>this question's answer</td></tr>
+            <tr><td>doc</td><td>question 3</td></tr>
+            <tr><td>diagram</td><td>100</td></tr>
+            <tr><td>mockup</td><td>exempt (frames, not prose)</td></tr>
+          </tbody>
+        </table>
+      </details>
+      <div class="qopt" data-value="150">150</div>
+      <div class="qopt" data-value="200">200</div>
+      <div class="qopt" data-value="300">300</div>
+    </section>
+
+    <section class="block question dcard" data-block-id="q-details"
+             data-block-label="details.html fate"
+             data-question-id="details_page" data-question-mode="single">
+      <h3>2 · Keep details.html, or one page always?</h3>
+      <div class="lean">Keep as overflow for deep design; most plans go single-page.</div>
+      <details class="why"><summary>why</summary>
+        <p>Killing it gives one mental model: everything is on the plan page,
+           expanded or not. But a big architecture plan inside collapsed
+           <code>&lt;details&gt;</code> makes cards heavy to edit and comment on;
+           a second ungated page is cheaper than 500-word whys. Today 4 of 17
+           workspaces used details.html.</p>
+      </details>
+      <div class="qopt" data-value="keep">Keep as overflow for deep design</div>
+      <div class="qopt" data-value="kill">Kill — one page always</div>
+    </section>
+
+    <section class="block question dcard" data-block-id="q-doc"
+             data-block-label="doc-mode budget"
+             data-question-id="doc_budget" data-question-mode="single">
+      <h3>3 · Budget docs too?</h3>
+      <div class="lean">Yes — 600 visible (~2 screens), depth collapsed.</div>
+      <details class="why"><summary>why</summary>
+        <p>The infra-scaling workspace is a single long essay. Long-form
+           reference belongs in repo docs; a canvas doc exists to be reviewed,
+           so it gets the same progressive-disclosure treatment: lead
+           sections visible, depth collapsed.</p>
+      </details>
+      <div class="qopt" data-value="600">Budget docs at 600 visible</div>
+      <div class="qopt" data-value="exempt">Exempt docs</div>
+    </section>
+
+    <section class="block" data-block-id="settled" data-block-label="Settled">
+      <h3>Settled</h3>
+      <div class="settled">
+        <details data-cmt-id="s-components">
+          <summary>plan.css gains: verdict strip · decision card · settled row · delta</summary>
+          <div>document-quality.md gets a content-type → component table; a paragraph
+               becomes the justified exception, not the default. Components are the ones
+               prototyped on this page (<code>proto.css</code> promotes into
+               <code>plan.css</code> without the proto- names).</div>
+        </details>
+        <details data-cmt-id="s-meter">
+          <summary>Meter in the nav: visible words / budget, red when over, never blocks</summary>
+          <div>Your call from the scoping questions: visibility over a hard gate.
+               Rendered by <code>comments.js</code>; per-page override via
+               <code>data-budget-words</code>; defaults keyed off
+               <code>data-canvas-kind</code>. The pre-handoff check adds one line:
+               "meter green (or say why not)".</div>
+        </details>
+        <details data-cmt-id="s-collapse">
+          <summary>Collapsed &lt;details&gt; text is budget-free; comment jumps auto-expand it</summary>
+          <div>The pressure valve: context survives in full, reading is opt-in, per
+               decision, in place. <code>comments.js</code> learns one behavior: when a
+               comment chip or panel jump targets an element inside a closed
+               <code>details</code>, open it first so anchors stay reachable.</div>
+        </details>
+        <details data-cmt-id="s-lean">
+          <summary>Options stay neutral; the lean has its own slot</summary>
+          <div>Existing rule, now structural — with a styled lean line there is no
+               reason to write "(recommended)" inside an option again. The You-decide
+               row keeps working because options never editorialize.</div>
+        </details>
+        <details data-cmt-id="s-anatomy">
+          <summary>Page anatomy everywhere: verdict → cards → settled → ask</summary>
+          <div>Root-cause narration, evidence, and already-made decisions stop being
+               top-level blocks: each lives collapsed under the card or settled row it
+               supports, or moves to the overflow page (question 2). Summary paragraph
+               is replaced by the verdict strip.</div>
+        </details>
+        <details data-cmt-id="s-files">
+          <summary>Implementation next session from spec.md</summary>
+          <div>Files: <code>assets/plan.css</code>, <code>assets/comments.js</code>,
+               <code>assets/template.html</code>, <code>assets/canvas.html</code>,
+               <code>references/document-quality.md</code>, <code>references/modes.md</code>,
+               <code>SKILL.md</code>, <code>tests/test_comments.js</code> (meter +
+               auto-expand cases). Daemon untouched.</div>
+        </details>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="ask" data-block-label="What approval unblocks">
+      <p>Approve → I write <code>spec.md</code> beside this canvas (behaviors, budgets
+         as answered, test list) for the build session. No skill files change today.</p>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script src="proto.js"></script>
+</body>
+</html>
