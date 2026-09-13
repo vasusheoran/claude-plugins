@@ -68,6 +68,16 @@
       "category": "productivity",
       "source": "./plugins/git",
       "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/git"
+    },
+    {
+      "name": "vault",
+      "description": "HashiCorp Vault ops for the homelab Vault — vault:login re-authenticates the local CLI via Authentik OIDC when a command fails with permission denied / invalid token / 403.",
+      "author": {
+        "name": "Vasu Sheoran"
+      },
+      "category": "productivity",
+      "source": "./plugins/vault",
+      "homepage": "https://github.com/vasusheoran/claude-plugins/tree/main/plugins/vault"
     }
   ]
 }
