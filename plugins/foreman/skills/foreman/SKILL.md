@@ -131,12 +131,22 @@ Mechanics (herdr socket CLI; `herdr agent --help` for details). Two commands
 per worker — start it, then move its pane into its own labeled tab:
 
     herdr agent start foreman-<item> --workspace <ws-id> \
-        --cwd <project> --no-focus -- \
+        --cwd <worktree-or-project> --no-focus -- \
         claude --model <haiku|sonnet|opus> --permission-mode auto \
         --setting-sources user,local "<self-contained prompt>"
     # → note the pane_id in the result
     herdr pane move <pane_id> --new-tab --label "foreman:<item>" --no-focus
     # → append "<item> foreman-<item> <pane_id> <tab_id>" to the stop roster
+
+**Working in a git worktree.** When the feature is isolated in a git worktree
+(ADR 0020 / `scripts/wt.sh` / `herdr worktree`), pass the worktree path as
+`--cwd`, not the main checkout — `--cwd` sets both the worker's working
+directory and the herdr pane/tab cwd in one shot, so the worker and its tab
+are rooted in the tree. No worktree in play → the project root as before.
+Directly-applied trivial edits (the orchestrator carve-out below) land in the
+same worktree via `git -C <worktree>` / absolute paths — the orchestrator's
+own tab stays on the main checkout (a live session's cwd is fixed at launch;
+herdr can't chdir it, and this checkout is the review/merge home).
 
 `--setting-sources user,local` drops the project CLAUDE.md from each worker
 (a large per-spawn token load; verified 2026-07-26) while keeping
