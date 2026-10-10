@@ -1,9 +1,9 @@
 ---
-name: login
+name: auth
 description: Use when a HashiCorp Vault CLI command against the homelab Vault fails with "permission denied", "invalid token", "token expired", or a 403 — the local OIDC token (8h TTL) has expired and needs re-authenticating. Also use to log in from a fresh machine that has never authenticated.
 ---
 
-# vault:login
+# vault:auth
 
 Authenticate the local Vault CLI to the homelab Vault via Authentik OIDC (passkey).
 

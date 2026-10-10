@@ -11,7 +11,7 @@ Everyday secret CRUD against the homelab Vault's KV-v2 store at `secret/`.
 
 Any task that reads or writes a homelab secret. Auth is per-identity: `vasu`'s OIDC
 login carries `claude-write` (full `secret/*` CRUD). If a command 403s, the token
-lapsed — re-run [[vault:login]].
+lapsed — re-run [[vault:auth]].
 
 ## Read
 

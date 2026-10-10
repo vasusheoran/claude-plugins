@@ -1,6 +1,6 @@
 {
   "name": "vault",
-  "description": "HashiCorp Vault ops for the homelab Vault — login (Authentik OIDC re-auth), kv (get/put/patch secrets), privileged (root-only policy/auth/mount admin via staged token), revoke (tear down tokens/leases).",
+  "description": "HashiCorp Vault ops for the homelab Vault — auth (Authentik OIDC re-auth login), kv (get/put/patch secrets), privileged (root-only policy/auth/mount admin via staged token), revoke (tear down tokens/leases).",
   "author": {
     "name": "Vasu Sheoran",
     "email": "vasusheoran92@gmail.com"
