@@ -382,7 +382,7 @@ CONTENT_TYPES = {
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 _KIND_RE = re.compile(r"<body[^>]*\bdata-canvas-kind=[\"']([a-zA-Z]+)[\"']",
                       re.IGNORECASE)
-_PAGE_KINDS = {"plan", "mockup", "diagram", "decision", "doc"}
+_PAGE_KINDS = {"plan", "mockup", "diagram", "decision", "doc", "deck", "board"}
 
 
 def _list_pages(plan_dir):

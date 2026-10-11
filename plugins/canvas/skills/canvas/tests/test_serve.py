@@ -592,6 +592,23 @@ class PagesApiTests(TmpDirCase):
         self.assertEqual(by_file["flow.html"], "diagram")
 
 
+class PageKindsV2Tests(TmpDirCase):
+    def test_list_pages_detects_deck_and_board_kinds(self):
+        (self.tmp / "plan.html").write_text(
+            '<title>d</title><body data-canvas-kind="deck">')
+        (self.tmp / "b.html").write_text(
+            '<title>b</title><body data-canvas-kind="board">')
+        kinds = {p["file"]: p["kind"] for p in serve._list_pages(self.tmp)}
+        self.assertEqual(kinds["plan.html"], "deck")
+        self.assertEqual(kinds["b.html"], "board")
+
+    def test_list_pages_legacy_kinds_still_pass(self):
+        (self.tmp / "m.html").write_text(
+            '<title>m</title><body data-canvas-kind="mockup">')
+        kinds = {p["file"]: p["kind"] for p in serve._list_pages(self.tmp)}
+        self.assertEqual(kinds["m.html"], "mockup")
+
+
 # ---------------------------------------------------------------------------
 # Page-keyed comments: multi-artifact workspaces anchor comments per page
 # ---------------------------------------------------------------------------

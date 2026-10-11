@@ -82,7 +82,8 @@
 
   // Typed-tab kind → glyph (unknown kinds show the neutral doc glyph).
   function tabIcon(kind) {
-    return { plan: "📋", mockup: "🧩", diagram: "⇄", decision: "◆", doc: "📄" }[kind] || "📄";
+    return { plan: "📋", mockup: "🧩", diagram: "⇄", decision: "◆", doc: "📄",
+             deck: "▦", board: "▧" }[kind] || "📄";
   }
 
   // A page entry's kind: explicit "kind" from /api/pages, else a fallback for

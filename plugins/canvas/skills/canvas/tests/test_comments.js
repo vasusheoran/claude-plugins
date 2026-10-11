@@ -191,5 +191,14 @@ test("pageKind: explicit kind wins; else plan.html→plan, other→doc", () => {
   assert.strictEqual(pageKind({ file: "mockup-a.html" }), "doc");
 });
 
+test("tabIcon knows the v2 kinds", () => {
+  assert.strictEqual(tabIcon("deck"), "▦");
+  assert.strictEqual(tabIcon("board"), "▧");
+});
+test("pageKind fallback unchanged for legacy servers", () => {
+  assert.strictEqual(pageKind({ file: "plan.html" }), "plan");
+  assert.strictEqual(pageKind({ file: "x.html" }), "doc");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
