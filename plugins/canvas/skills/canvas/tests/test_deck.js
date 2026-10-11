@@ -44,5 +44,13 @@ test("multi and freeform answers count once non-empty (review focus)", () => {
     deckModel(["q"], [{ questionId: "q", value: "typed text" }]).states, ["answered"]);
 });
 
+const { shouldPrompt } = require("../assets/deck.js");
+test("shouldPrompt fires exactly on the false->true edge, once", () => {
+  assert.ok(shouldPrompt(false, true, false));
+  assert.ok(!shouldPrompt(true, true, false));   // already done at load
+  assert.ok(!shouldPrompt(false, true, true));   // already shown this load
+  assert.ok(!shouldPrompt(false, false, false));
+});
+
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

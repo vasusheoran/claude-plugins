@@ -26,8 +26,12 @@
     };
   }
 
+  function shouldPrompt(prevDone, nowDone, alreadyShown) {
+    return !prevDone && nowDone && !alreadyShown;
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
-    module.exports = { deckModel: deckModel, isAnswered: isAnswered };
+    module.exports = { deckModel: deckModel, isAnswered: isAnswered, shouldPrompt: shouldPrompt };
     return;
   }
 
@@ -115,7 +119,17 @@
   });
 
   var _finishShown = false;
-  function maybeFinishPrompt() { /* body added in Task 9 */ }
+  var _prevDone = null;
+  function maybeFinishPrompt() {
+    var m = deckModel(qids(), answers);
+    if (_prevDone === null) { _prevDone = m.allDone; return; }
+    if (shouldPrompt(_prevDone, m.allDone, _finishShown)) {
+      _finishShown = true;
+      if (window.CanvasReview && window.CanvasReview.openSend)
+        window.CanvasReview.openSend();
+    }
+    _prevDone = m.allDone;
+  }
 
   window.CanvasDeck = { refresh: render };
   render();
