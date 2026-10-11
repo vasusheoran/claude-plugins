@@ -1200,14 +1200,18 @@
     var s = document.getElementById("cmt-sheet"); if (s) s.remove();
     var sc = document.getElementById("cmt-scrim"); if (sc) sc.remove();
   }
-  function openSheet(innerHtml) {
+  // variant: optional extra class (e.g. "cmt-sheet-pages"). On desktop CSS
+  // re-anchors a variant sheet as a dropdown under its control; the scrim
+  // stays (transparent there) so an outside click still dismisses it.
+  function openSheet(innerHtml, variant) {
     closeSheet();
     var scrim = document.createElement("div");
-    scrim.id = "cmt-scrim"; scrim.className = "cmt-scrim";
+    scrim.id = "cmt-scrim";
+    scrim.className = "cmt-scrim" + (variant ? " " + variant + "-scrim" : "");
     scrim.onclick = closeSheet;
     document.body.appendChild(scrim);
     var sheet = document.createElement("div");
-    sheet.id = "cmt-sheet"; sheet.className = "cmt-sheet";
+    sheet.id = "cmt-sheet"; sheet.className = "cmt-sheet" + (variant ? " " + variant : "");
     sheet.innerHTML = innerHtml;
     document.body.appendChild(sheet);
     return sheet;
@@ -1231,7 +1235,7 @@
         (badge ? '<span class="cmt-pagerow-badge">' + badge + "</span>" : "") +
         "</a>";
     }).join("");
-    openSheet('<div class="cmt-sheet-head">Pages</div>' + rows);
+    openSheet('<div class="cmt-sheet-head">Pages</div>' + rows, "cmt-sheet-pages");
   }
 
   /* --------------------------- send popover -------------------------- */
