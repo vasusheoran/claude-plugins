@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <!--
-  canvas scaffold for non-plan artifacts (mockup / decide / diagram / doc).
-  Copy this into the workspace once per artifact and rename freely —
-  mockup-a.html, options.html, arch.html, notes.html. Every *.html in the
-  folder appears as a tab.
+  Canvas offers three surfaces: deck (answering — data-canvas-kind="deck"),
+  board (looking — copy board.html for a board), and doc (reading, freeform —
+  data-canvas-kind="doc", this scaffold). Copy this file into the workspace
+  once per doc/freeform page and rename freely — arch.html, notes.html, etc.
+  Every *.html in the folder appears as a tab. Optional: set data-budget-words
+  to override the default word count budget for this surface (deck 200, doc 600,
+  board exempt).
   Rules:
    - Every reviewable section is <section class="block" data-block-id="..."
      data-block-label="..."> so it can be commented on.
