@@ -11,7 +11,7 @@ const assert = require("assert");
 const {
   apiBase, tabHref,
   normalizeState, groupComments, feedIcon, sendCount, seenChip,
-  tabIcon, pageKind, answeredValue,
+  tabIcon, pageKind, answeredValue, budgetFor, wordCount,
 } = require("../assets/comments.js");
 
 let passed = 0, failed = 0;
@@ -206,6 +206,21 @@ test("answeredValue renders scalars, multi, other, defer", () => {
   assert.strictEqual(answeredValue({ value: "__other__", otherText: "hmm" }), "hmm");
   assert.strictEqual(answeredValue({ value: "__defer__" }), "you decide");
   assert.strictEqual(answeredValue(null), "");
+});
+
+test("budgetFor: kinds and override", () => {
+  assert.strictEqual(budgetFor("deck", null), 200);
+  assert.strictEqual(budgetFor("plan", null), 200);
+  assert.strictEqual(budgetFor("doc", null), 600);
+  assert.strictEqual(budgetFor("diagram", null), 100);
+  assert.strictEqual(budgetFor("mockup", null), null);
+  assert.strictEqual(budgetFor("board", null), null);
+  assert.strictEqual(budgetFor("doc", "150"), 150);
+});
+test("wordCount splits on whitespace, ignores empties", () => {
+  assert.strictEqual(wordCount("  one two\n three "), 3);
+  assert.strictEqual(wordCount(""), 0);
+  assert.strictEqual(wordCount(null), 0);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

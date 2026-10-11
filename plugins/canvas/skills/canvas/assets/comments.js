@@ -104,12 +104,27 @@
     return Array.isArray(a.value) ? a.value.join(", ") : String(a.value);
   }
 
+  // Visible-word budget by page kind; a numeric data-budget-words override
+  // always wins. null means "no budget" (board is spatial, exempt).
+  var BUDGETS = { plan: 200, deck: 200, decision: 200, doc: 600, diagram: 100 };
+  function budgetFor(kind, overrideAttr) {
+    var o = parseInt(overrideAttr, 10);
+    if (!isNaN(o) && o > 0) return o;
+    return BUDGETS.hasOwnProperty(kind) ? BUDGETS[kind] : null;
+  }
+  function wordCount(text) {
+    if (!text) return 0;
+    var m = String(text).trim().match(/\S+/g);
+    return m ? m.length : 0;
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
     module.exports = {
       apiBase: apiBase, tabHref: tabHref,
       normalizeState: normalizeState, groupComments: groupComments,
       feedIcon: feedIcon, sendCount: sendCount, seenChip: seenChip,
       tabIcon: tabIcon, pageKind: pageKind, answeredValue: answeredValue,
+      budgetFor: budgetFor, wordCount: wordCount,
     };
     return; // node test harness: expose the pure core, skip the DOM widget
   }
@@ -970,7 +985,11 @@
       it.onclick = function () {
         var c = byId(cid);
         var el = (c.componentId && resolveComponent(c.componentId)) || blockEl(c.blockId);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (el) {
+          for (var d = el.closest("details"); d; d = d.parentElement && d.parentElement.closest("details"))
+            d.open = true;
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       };
     });
     var ex = p.querySelector("#cmt-export");
@@ -1295,11 +1314,38 @@
     }).catch(function () { /* server gone; ignore */ });
   }
 
+  /* ------------------------- visible-word budget ---------------------- */
+
+  function visibleText() {
+    var main = document.querySelector("main");
+    if (!main) return "";
+    var clone = main.cloneNode(true);
+    clone.querySelectorAll("script, style, #cmt-nav").forEach(function (n) { n.remove(); });
+    clone.querySelectorAll("details").forEach(function (d) {
+      var s = d.querySelector("summary");
+      d.replaceWith(s ? s.cloneNode(true) : "");   // budget = default view, open or not
+    });
+    return clone.textContent || "";
+  }
+  function renderMeter() {
+    var kind = document.body.getAttribute("data-canvas-kind") || "doc";
+    var budget = budgetFor(kind, document.body.getAttribute("data-budget-words"));
+    if (budget == null) return;
+    var words = wordCount(visibleText());
+    var screens = Math.round(document.documentElement.scrollHeight /
+                             window.innerHeight * 10) / 10;
+    var el = document.getElementById("cmt-meter") || document.createElement("div");
+    el.id = "cmt-meter"; el.className = "cmt-meter" + (words > budget ? " over" : "");
+    el.textContent = words + " / " + budget + "w · ~" + screens + " screens";
+    if (!el.parentNode) document.body.appendChild(el);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     highlightChangedBlocks();          // hash authored HTML before we decorate it
     numberAnnotated();
     loadAll().then(function () {
       renderAll();
+      renderMeter();
       if (hasServer) setInterval(poll, 2500);
     });
   });

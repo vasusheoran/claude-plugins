@@ -846,6 +846,11 @@ body.cmt-pick .cmt-nav {
   100% { background: transparent; box-shadow: none; }
 }
 
+.cmt-meter { position: fixed; right: 12px; bottom: 72px; z-index: 40;
+  font: 10px var(--mono); color: var(--muted); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.cmt-meter.over { color: var(--risk); border-color: var(--risk); }
+
 /* global reduced-motion reduction (extends the design's) */
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
