@@ -232,6 +232,18 @@ class CommentLifecycleTests(TmpDirCase):
         self.assertEqual(c["status"], "open")
         self.assertEqual(c["target"], "agent")
 
+    def test_comment_add_preserves_pin(self):
+        store = self._store()
+        c = store.add({"body": "b", "page": "b.html",
+                       "pin": {"frameId": "frame-a", "x": 12.5, "y": 40}})
+        self.assertEqual(c["pin"], {"frameId": "frame-a", "x": 12.5, "y": 40})
+        stored = store.list()[0]
+        self.assertEqual(stored["pin"]["frameId"], "frame-a")
+
+    def test_comment_add_without_pin_has_no_pin_key(self):
+        c = self._store().add({"body": "b"})
+        self.assertNotIn("pin", c)
+
     def test_legacy_status_maps_to_state_at_read(self):
         path = self.tmp / "comments.json"
         path.write_text(json.dumps({"comments": [

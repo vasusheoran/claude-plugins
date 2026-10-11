@@ -29,9 +29,19 @@
              w: (x1 - x0) + 2 * margin, h: (y1 - y0) + 2 * margin };
   }
 
+  function pagePins(comments, page) {
+    return (comments || []).filter(function (c) {
+      return c.page === page && c.pin;
+    }).map(function (c) {
+      return { id: c.id, x: c.pin.x, y: c.pin.y, body: c.body,
+               resolved: c.state === "resolved" };
+    });
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
     module.exports = { zoomAt: zoomAt, fitTransform: fitTransform,
-                       worldPoint: worldPoint, boundsOf: boundsOf };
+                       worldPoint: worldPoint, boundsOf: boundsOf,
+                       pagePins: pagePins };
     return;
   }
 
@@ -119,6 +129,32 @@
     },
     refresh: apply, fit: fit,
   };
+
+  var curPage = location.pathname.split("/").pop() || "plan.html";
+  function renderPins(comments) {
+    [].slice.call(world.querySelectorAll(".board-pin")).forEach(function (p) { p.remove(); });
+    pagePins(comments, curPage).forEach(function (p, i) {
+      var el = document.createElement("div");
+      el.className = "board-pin" + (p.resolved ? " resolved" : "");
+      el.setAttribute("data-comment-id", p.id);
+      el.style.left = p.x + "px"; el.style.top = p.y + "px";
+      el.textContent = String(i + 1);
+      el.title = p.body;
+      world.appendChild(el);
+    });
+  }
+  document.addEventListener("canvas:state", function (e) {
+    renderPins((e.detail && e.detail.comments) || []);
+  });
+  vp.addEventListener("dblclick", function (e) {
+    if (e.target.closest(".board-pin, .board-toolbar")) return;
+    var w = window.CanvasBoard.worldFromClient(e.clientX, e.clientY);
+    var frame = e.target.closest("[data-frame-id]");
+    window.CanvasReview.composeWith(frame || world, {
+      pin: { frameId: frame ? frame.getAttribute("data-frame-id") : "",
+             x: Math.round(w.x), y: Math.round(w.y) },
+    });
+  });
 
   if (location.hash) focusFrame(location.hash.slice(1)); else fit();
 })();

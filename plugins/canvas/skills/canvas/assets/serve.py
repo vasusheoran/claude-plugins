@@ -130,6 +130,10 @@ class CommentStore(_JsonFile):
             comment["status"] = fields["status"]
         if "target" in fields:
             comment["target"] = fields["target"]
+        if isinstance(fields.get("pin"), dict):
+            comment["pin"] = {"frameId": str(fields["pin"].get("frameId", "")),
+                              "x": float(fields["pin"].get("x", 0)),
+                              "y": float(fields["pin"].get("y", 0))}
         with self._lock:
             data = self.read()
             data.setdefault("comments", []).append(comment)

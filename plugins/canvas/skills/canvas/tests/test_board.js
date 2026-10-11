@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("assert");
-const { zoomAt, fitTransform, worldPoint, boundsOf } = require("../assets/board.js");
+const { zoomAt, fitTransform, worldPoint, boundsOf, pagePins } = require("../assets/board.js");
 let passed = 0, failed = 0;
 function test(name, fn) {
   try { fn(); passed++; console.log("ok - " + name); }
@@ -43,6 +43,17 @@ test("boundsOf wraps frames with margin", () => {
 test("boundsOf of nothing is a unit box (fit never divides by zero)", () => {
   const b = boundsOf([], 40);
   assert.ok(b.w > 0 && b.h > 0);
+});
+
+test("pagePins keeps only this page's pinned, keyed by state", () => {
+  const pins = pagePins([
+    { id: "c1", page: "b.html", state: "sent", pin: { frameId: "f", x: 1, y: 2 } },
+    { id: "c2", page: "b.html", state: "resolved", pin: { frameId: "gone", x: 3, y: 4 } },
+    { id: "c3", page: "b.html", state: "sent" },               // no pin
+    { id: "c4", page: "other.html", state: "sent", pin: { frameId: "f", x: 0, y: 0 } },
+  ], "b.html");
+  assert.strictEqual(pins.length, 2);                          // c2 kept (review focus #3)
+  assert.strictEqual(pins[1].resolved, true);
 });
 
 console.log(passed + " passed, " + failed + " failed");

@@ -692,7 +692,7 @@
   // one action — "Add" (plus Cancel): every new comment is a pending draft,
   // editable and deletable from the panel until Send. (The legacy `anchor`
   // parameter is retained for call-site compatibility but is always null.)
-  function openComposer(el, anchor, asComponent, quoteText) {
+  function openComposer(el, anchor, asComponent, quoteText, preset) {
     closeComposer(true);                          // stash any in-progress draft
     var isComponent = !!asComponent && el && el.nodeType === 1 && el.tagName !== "BODY";
     var host = (el.closest && el.closest("[data-block-id]")) || el;
@@ -732,11 +732,11 @@
     function save() {
       var body = ta.value.trim(); if (!body) return;
       activeComposer = null; saveDraft(dkey, ""); box.remove();
-      addComment({
+      addComment(Object.assign({
         blockId: blockId, blockLabel: blockLabel,
         componentId: componentId, componentLabel: componentLabel,
         quote: quote || null, body: body, page: curPage,
-      }).then(function () { toast("Draft added — edit or delete it until you Send."); refreshAll(); });
+      }, preset || {})).then(function () { toast("Draft added — edit or delete it until you Send."); refreshAll(); });
     }
     box.querySelector(".add").addEventListener("click", save);
     box.querySelector(".cancel").addEventListener("click", function () { closeComposer(false); });
@@ -1277,6 +1277,12 @@
   // Task 9's deck finish prompt opens the send sheet through this.
   window.CanvasReview = window.CanvasReview || {};
   window.CanvasReview.openSend = openSendPopover;
+
+  // board.js (and any other surface) opens the normal composer with extra
+  // fields (e.g. a pin) merged into the comment it creates.
+  window.CanvasReview.composeWith = function (anchorEl, preset) {
+    openComposer(anchorEl, null, true, null, preset || {});
+  };
 
   /* ------------------------ activity feed & toasts ------------------- */
 
