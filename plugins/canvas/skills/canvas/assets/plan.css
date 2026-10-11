@@ -908,3 +908,66 @@ body[data-canvas-kind="board"] #world { position: absolute; top: 0; left: 0;
 .board-toolbar button { font: 12px var(--mono); color: var(--ink);
   background: transparent; border: 1px solid var(--line); border-radius: 5px;
   padding: 3px 8px; cursor: pointer; }
+
+/* ---- verdict strip + settled (deck anatomy) ---- */
+.verdict { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+.verdict .chip { border: 1px solid var(--line-strong); border-radius: 8px;
+  padding: 8px 14px; background: var(--bg-soft); min-width: 120px; }
+.verdict .chip .l { font: 10px var(--mono); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+.verdict .chip .v { font: 600 13px var(--sans); color: var(--ink); margin-top: 2px; }
+.verdict .chip.accent { border-color: var(--accent); background: var(--accent-ghost); }
+.verdict .chip.accent .v { color: var(--accent); }
+.settled details { border-left: 2px solid var(--decision); padding-left: 10px; margin: 6px 0; }
+.settled summary { font: 13px var(--sans); color: var(--ink); cursor: pointer; }
+.settled summary::before { content: "✓ "; color: var(--decision); font-weight: 700; }
+.settled p { font: 12px/1.5 var(--sans); color: var(--muted); margin: 6px 0 2px; }
+
+/* ---- nav v2 — bottom bar everywhere, sheets, presence ---- */
+.cmt-top { position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  background: var(--bg); border-bottom: 1px solid var(--line); }
+.cmt-top-title { font: 600 13px var(--sans); color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmt-pages-chip { margin-left: auto; flex: none; font: 11px var(--mono);
+  border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 10px;
+  color: var(--ink); background: var(--bg-soft); cursor: pointer; }
+.cmt-pages-chip .chg { display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--open); margin-left: 5px; }
+.cmt-nav.cmt-bottom { position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+  z-index: 40; height: 56px; display: flex; align-items: center; gap: 6px;
+  padding: 0 10px calc(env(safe-area-inset-bottom, 0px)); background: var(--bg);
+  border-top: 1px solid var(--line); }
+.cmt-nav.cmt-bottom .cmt-nav-btn { height: 40px; min-width: 42px; border-radius: 9px; }
+.cmt-nav.cmt-bottom .cmt-send { margin-left: auto; height: 40px;
+  border-radius: 10px; padding: 0 16px; }
+.cmt-presence { display: inline-flex; align-items: center; gap: 6px;
+  font: 11px var(--mono); color: var(--muted); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 10px; }
+.cmt-presence .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+.cmt-presence .dot.pulse { animation: cmt-pulse 2s infinite; }
+.cmt-presence .dot.off { background: var(--resolved); }
+@keyframes cmt-pulse { 50% { opacity: .25; } }
+.cmt-sheet { position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: 0; z-index: 60; width: 100%; max-width: 520px; background: var(--bg);
+  border: 1px solid var(--line-strong); border-bottom: none;
+  border-radius: 16px 16px 0 0; padding: 10px 14px
+  calc(14px + env(safe-area-inset-bottom, 0px)); max-height: 70vh;
+  overflow: auto; box-shadow: 0 -8px 30px rgba(0,0,0,.14); }
+.cmt-scrim { position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.25); }
+main.plan { padding-top: 56px; padding-bottom: 72px; }
+
+/* ---- sheet contents (pages list, send) ---- */
+.cmt-sheet-head { font: 11px var(--mono); color: var(--muted);
+  letter-spacing: .06em; text-transform: uppercase; margin: 2px 2px 8px; }
+.cmt-pagerow { display: flex; align-items: center; gap: 10px; padding: 11px 8px;
+  border-radius: 8px; font: 13px var(--sans); color: var(--ink);
+  text-decoration: none; }
+.cmt-pagerow:hover, .cmt-pagerow.current { background: var(--bg-soft); }
+.cmt-pagerow-icon { flex: none; width: 20px; text-align: center; }
+.cmt-pagerow-title { flex: 1; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.cmt-pagerow-chg { flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--open); }
+.cmt-pagerow-badge { flex: none; font: 10px var(--mono); background: var(--ink);
+  color: var(--bg); border-radius: 999px; padding: 2px 7px; }
