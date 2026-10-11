@@ -990,3 +990,7 @@ main.plan { padding-top: 56px; padding-bottom: 72px; }
     padding: 8px; }
   .cmt-sheet-pages-scrim { background: transparent; }  /* no dimming for a menu */
 }
+
+/* pinned composer (board) — fixed-centered so it never clips or scales */
+.cmt-composer.cmt-composer-pin { position: fixed; left: 50%; top: 72px;
+  transform: translateX(-50%); z-index: 70; width: min(92vw, 360px); }

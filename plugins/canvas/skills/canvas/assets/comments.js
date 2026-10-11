@@ -711,8 +711,12 @@
       : quote ? "❝ " + escapeHtml(quote.slice(0, 200))
       : escapeHtml(blockLabel);
 
+    // A pinned composer (board surface) must NOT nest inside the transformed
+    // #world — it would inherit the zoom scale and clip off-screen. Float it
+    // fixed-centered in the viewport instead.
+    var pinned = !!(preset && preset.pin);
     var box = document.createElement("div");
-    box.className = "cmt-composer";
+    box.className = "cmt-composer" + (pinned ? " cmt-composer-pin" : "");
     box.innerHTML =
       '<div class="quote">' + ctx + "</div>" +
       '<textarea placeholder="What should change here?  (Shift+Enter to add)"></textarea>' +
@@ -720,7 +724,7 @@
         '<button class="cmt-btn cancel">Cancel</button>' +
         '<button class="cmt-btn primary add">Add</button>' +
       "</div>";
-    (host.appendChild ? host : document.body).appendChild(box);
+    (pinned || !host.appendChild ? document.body : host).appendChild(box);
     var ta = box.querySelector("textarea");
     ta.value = loadDraft(dkey); ta.focus();
     activeComposer = { box: box, ta: ta, dkey: dkey };
