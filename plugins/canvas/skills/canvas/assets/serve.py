@@ -333,7 +333,7 @@ class EventBus:
 # The only files the shared-asset fallback may serve. Workspaces used to carry
 # copies of these; canvasd passes assets_dir so they resolve to the skill's
 # shared copy when the workspace has none (a workspace file always wins).
-SHARED_ASSETS = {"plan.css", "comments.js", "diagram.js"}
+SHARED_ASSETS = {"plan.css", "comments.js", "diagram.js", "deck.js", "board.js"}
 
 
 def safe_path(root, url_path, assets_dir=None):
