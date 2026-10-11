@@ -1,0 +1,67 @@
+{
+  "answers": [
+    {
+      "questionId": "taxonomy",
+      "questionLabel": "Mode taxonomy",
+      "mode": "single",
+      "value": "replace",
+      "answeredAt": "2026-10-10T19:41:26.274573+00:00"
+    },
+    {
+      "questionId": "lean-visibility",
+      "questionLabel": "Lean visibility",
+      "mode": "single",
+      "value": "shown",
+      "answeredAt": "2026-10-10T19:41:34.456198+00:00"
+    },
+    {
+      "questionId": "deck-focus",
+      "questionLabel": "Deck focus model",
+      "mode": "single",
+      "value": "stepper",
+      "answeredAt": "2026-10-10T19:41:52.623022+00:00"
+    },
+    {
+      "questionId": "board-pins",
+      "questionLabel": "Board comments",
+      "mode": "single",
+      "value": "pins",
+      "answeredAt": "2026-10-10T19:42:04.317078+00:00"
+    },
+    {
+      "questionId": "nav-desktop",
+      "questionLabel": "Desktop nav",
+      "mode": "single",
+      "value": "bottom-everywhere",
+      "answeredAt": "2026-10-10T23:17:38.844933+00:00"
+    },
+    {
+      "questionId": "nav-mobile",
+      "questionLabel": "Mobile nav layout",
+      "mode": "single",
+      "value": "__defer__",
+      "answeredAt": "2026-10-10T23:17:40.719983+00:00"
+    },
+    {
+      "questionId": "presence",
+      "questionLabel": "Presence chip",
+      "mode": "single",
+      "value": "three-state",
+      "answeredAt": "2026-10-11T03:52:13.670067+00:00"
+    },
+    {
+      "questionId": "change-markers",
+      "questionLabel": "Change markers",
+      "mode": "single",
+      "value": "page-dots",
+      "answeredAt": "2026-10-11T03:52:21.989738+00:00"
+    },
+    {
+      "questionId": "finish-prompt",
+      "questionLabel": "Deck finish prompt",
+      "mode": "single",
+      "value": "prompt",
+      "answeredAt": "2026-10-11T03:52:31.105648+00:00"
+    }
+  ]
+}

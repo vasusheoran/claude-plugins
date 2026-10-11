@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board — Figma-like mockup surface</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    main.plan { max-width: 1200px; }
+    /* ---- board chrome ---- */
+    .board-wrap { border: 1px solid var(--line-strong); border-radius: 10px;
+      overflow: hidden; background: var(--bg-soft); position: relative;
+      height: 72vh; min-height: 480px; }
+    .board-toolbar { position: absolute; z-index: 30; top: 10px; left: 10px;
+      display: flex; gap: 6px; align-items: center;
+      background: var(--bg); border: 1px solid var(--line-strong);
+      border-radius: 8px; padding: 4px 6px; font: 12px var(--mono);
+      box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .board-toolbar button { font: 12px var(--mono); color: var(--ink);
+      background: transparent; border: 1px solid var(--line);
+      border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+    .board-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+    .board-toolbar .zoomlvl { min-width: 44px; text-align: center; color: var(--muted); }
+    .board-hint { position: absolute; z-index: 30; bottom: 10px; left: 50%;
+      transform: translateX(-50%); font: 11px var(--mono); color: var(--muted);
+      background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+      padding: 4px 12px; pointer-events: none; }
+    #viewport { position: absolute; inset: 0; cursor: grab; overflow: hidden;
+      background-image: radial-gradient(color-mix(in oklab, var(--ink) 14%, transparent) 1px, transparent 1px);
+      background-size: 24px 24px; touch-action: none; }
+    #viewport.panning { cursor: grabbing; }
+    #world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+    /* ---- frames ---- */
+    .frame { position: absolute; background: var(--bg);
+      border: 1.5px solid var(--line-strong); border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.10); }
+    .flabel { position: absolute; top: -24px; left: 0; font: 11px var(--mono);
+      color: var(--muted); white-space: nowrap; }
+    .flabel b { color: var(--accent); font-weight: 600; }
+    .frame.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ghost), 0 4px 16px rgba(0,0,0,.12); }
+
+    /* phone wireframe innards */
+    .phone { width: 100%; height: 100%; display: flex; flex-direction: column;
+      border-radius: 7px; overflow: hidden; }
+    .ph-status { height: 14px; background: var(--bg-soft); }
+    .ph-nav { height: 30px; background: var(--bg-soft); display: flex; align-items: center;
+      padding: 0 10px; font: 10px var(--mono); color: var(--muted); gap: 6px;
+      border-bottom: 1px solid var(--line); }
+    .ph-body { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .ph-row { height: 22px; border-radius: 4px; background: var(--bg-soft);
+      border: 1px solid var(--line); display:flex; align-items:center;
+      padding: 0 8px; font: 9px var(--mono); color: var(--muted); }
+    .ph-row.hl { border-color: var(--accent); background: var(--accent-ghost); color: var(--accent); }
+    .ph-tabbar { height: 30px; border-top: 1px solid var(--line); display: flex; }
+    .ph-tab { flex: 1; display: flex; align-items: center; justify-content: center;
+      font: 9px var(--mono); color: var(--muted); }
+    .ph-tab.on { color: var(--accent); font-weight: 600; }
+    .ph-fab { position: absolute; right: 10px; bottom: 40px; width: 24px; height: 24px;
+      border-radius: 50%; background: var(--accent); color: var(--bg);
+      display: flex; align-items: center; justify-content: center; font: 12px var(--mono); }
+
+    /* sticky note */
+    .sticky { position: absolute; width: 190px; padding: 10px 12px;
+      background: var(--note-bg); border: 1px solid color-mix(in oklab, var(--note) 40%, transparent);
+      border-radius: 6px; font: 11px/1.5 var(--sans); color: var(--ink);
+      transform: rotate(-1deg); box-shadow: 0 3px 10px rgba(0,0,0,.08); }
+    .sticky b { color: var(--note); }
+
+    /* flow card */
+    .flowcard { position: absolute; background: var(--bg); border: 1.5px solid var(--line-strong);
+      border-radius: 8px; padding: 14px; }
+
+    /* ---- pins ---- */
+    .pin { position: absolute; z-index: 20; width: 26px; height: 26px; cursor: pointer;
+      background: var(--open); color: var(--bg); border: 2px solid var(--bg);
+      border-radius: 50% 50% 50% 4px; display: flex; align-items: center;
+      justify-content: center; font: 600 11px var(--mono);
+      box-shadow: 0 2px 6px rgba(0,0,0,.25); transform: translate(-4px, -22px); }
+    .pin.resolved { background: var(--resolved); }
+    .pin .pop { display: none; position: absolute; left: 24px; top: -6px; width: 220px;
+      background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong);
+      border-radius: 8px; padding: 8px 10px; font: 11px/1.5 var(--sans);
+      box-shadow: 0 6px 18px rgba(0,0,0,.15); cursor: default; }
+    .pin .pop .who { font: 10px var(--mono); color: var(--muted); margin-bottom: 3px; }
+    .pin.open .pop { display: block; }
+  </style>
+</head>
+<body data-approval="off" data-canvas-kind="mockup">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">MOCKUP — concept, not built</span>
+      <span>Board: the "looking" surface</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>Board — spatial mockup &amp; diagram surface</h1>
+
+    <section class="block" data-block-id="board-intro" data-block-label="What the Board is">
+      <p><strong>Drag to pan · scroll/pinch to zoom · click a pin to read it ·
+      double-click anywhere to drop a demo pin.</strong> Mockup variants sit
+      side by side like Figma artboards; diagrams and notes share the same
+      space. Comments become <em>pins at a point</em>, not paragraphs under the
+      page. The example content is the Zaksha "settings help section" decision.</p>
+    </section>
+
+    <section class="block" data-block-id="board-demo" data-block-label="The board itself">
+      <div class="board-wrap">
+        <div class="board-toolbar">
+          <button id="zfit" title="Zoom to fit">⛶ Fit</button>
+          <button id="zout">−</button>
+          <span class="zoomlvl" id="zlvl">100%</span>
+          <button id="zin">+</button>
+          <button id="z100">100%</button>
+        </div>
+        <div class="board-hint">drag = pan · scroll = zoom · dbl-click = pin</div>
+        <div id="viewport">
+          <div id="world">
+
+            <!-- Variant A -->
+            <div class="frame" data-cmt-id="frame-a" style="left:0; top:0; width:220px; height:420px;">
+              <span class="flabel"><b>A</b> · Help tab in bottom nav</span>
+              <div class="phone">
+                <div class="ph-status"></div>
+                <div class="ph-nav">← &nbsp;Help</div>
+                <div class="ph-body">
+                  <div class="ph-row hl">🔍 Search help…</div>
+                  <div class="ph-row">Getting started</div>
+                  <div class="ph-row">Blocking a site</div>
+                  <div class="ph-row">Pause for guests</div>
+                  <div class="ph-row">Why is a site blocked?</div>
+                  <div class="ph-row">Contact us</div>
+                </div>
+                <div class="ph-tabbar">
+                  <div class="ph-tab">Home</div><div class="ph-tab">Rules</div>
+                  <div class="ph-tab on">Help</div><div class="ph-tab">Settings</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Variant B -->
+            <div class="frame" data-cmt-id="frame-b" style="left:300px; top:0; width:220px; height:420px;">
+              <span class="flabel"><b>B</b> · Section inside Settings</span>
+              <div class="phone">
+                <div class="ph-status"></div>
+                <div class="ph-nav">← &nbsp;Settings</div>
+                <div class="ph-body">
+                  <div class="ph-row">Profile &amp; plan</div>
+                  <div class="ph-row">Devices</div>
+                  <div class="ph-row">Notifications</div>
+                  <div class="ph-row hl">Help &amp; support ›</div>
+                  <div class="ph-row">About</div>
+                </div>
+                <div class="ph-tabbar">
+                  <div class="ph-tab">Home</div><div class="ph-tab">Rules</div>
+                  <div class="ph-tab on">Settings</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Variant C -->
+            <div class="frame" data-cmt-id="frame-c" style="left:600px; top:0; width:220px; height:420px;">
+              <span class="flabel"><b>C</b> · Contextual ? everywhere</span>
+              <div class="phone" style="position:relative;">
+                <div class="ph-status"></div>
+                <div class="ph-nav">← &nbsp;Rules</div>
+                <div class="ph-body">
+                  <div class="ph-row">Adult content &nbsp;·&nbsp; ON &nbsp; ?</div>
+                  <div class="ph-row hl">Social media &nbsp;·&nbsp; OFF &nbsp; ?</div>
+                  <div class="ph-row">Gaming &nbsp;·&nbsp; schedule &nbsp; ?</div>
+                  <div class="ph-row">Custom list &nbsp; ?</div>
+                </div>
+                <div class="ph-fab">?</div>
+                <div class="ph-tabbar">
+                  <div class="ph-tab">Home</div><div class="ph-tab on">Rules</div>
+                  <div class="ph-tab">Settings</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Flow diagram frame -->
+            <div class="flowcard" data-cmt-id="frame-flow" style="left:0; top:520px; width:520px; height:200px;">
+              <span class="flabel"><b>Flow</b> · user hits a blocked page → finds help</span>
+              <svg width="490" height="160" viewBox="0 0 490 160" style="display:block">
+                <defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 z" fill="var(--muted)"/></marker></defs>
+                <g font-family="var(--mono)" font-size="11" fill="var(--ink)">
+                  <rect x="10" y="20" width="120" height="44" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+                  <text x="70" y="46" text-anchor="middle">Blocked page</text>
+                  <rect x="190" y="20" width="120" height="44" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+                  <text x="250" y="40" text-anchor="middle">"Why?" link</text>
+                  <text x="250" y="54" text-anchor="middle" fill="var(--muted)" font-size="9">deep-links topic</text>
+                  <rect x="370" y="20" width="110" height="44" rx="7" fill="var(--accent-ghost)" stroke="var(--accent)"/>
+                  <text x="425" y="46" text-anchor="middle" fill="var(--accent)">Help topic</text>
+                  <rect x="190" y="100" width="120" height="44" rx="7" fill="var(--bg-soft)" stroke="var(--line-strong)"/>
+                  <text x="250" y="126" text-anchor="middle">WhatsApp us</text>
+                  <line x1="130" y1="42" x2="186" y2="42" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+                  <line x1="310" y1="42" x2="366" y2="42" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+                  <line x1="425" y1="64" x2="312" y2="118" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)" stroke-dasharray="4 3"/>
+                  <text x="395" y="100" fill="var(--muted)" font-size="9">unresolved →</text>
+                </g>
+              </svg>
+            </div>
+
+            <!-- Sticky note -->
+            <div class="sticky" data-cmt-id="note-constraint" style="left:600px; top:540px;">
+              <b>Constraint</b> — parents on Jio phones: help must work offline-ish
+              (cached), Hindi first, ≤ 2 taps from anywhere.
+            </div>
+
+            <!-- Pins (pre-placed examples) -->
+            <div class="pin" style="left:380px; top:205px;" data-pin>
+              1<div class="pop"><div class="who">vasu · on B</div>Help buried 2 levels deep — would my mum find this?</div>
+            </div>
+            <div class="pin resolved" style="left:695px; top:330px;" data-pin>
+              2<div class="pop"><div class="who">vasu · on C · resolved</div>FAB overlaps the tab bar on small phones. <em>— fixed, moved up 8px</em></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="board-mechanics" data-block-label="What ships vs what's shown">
+      <details>
+        <summary>What's real in the concept vs faked in this mockup</summary>
+        <p>Real in the shipped Board: pan/zoom (this page's implementation is the
+        real one), frames authored by Claude as plain HTML positioned via a
+        <code>board.json</code> layout, pin comments stored in the existing
+        <code>comments.json</code> with <code>x/y</code> + frame id, zoom-to-fit,
+        and deep links (<code>board.html#frame-b</code> zooms to a frame — the
+        Deck's thumbnails use this). Faked here: pins don't persist, frames are
+        hand-placed, no Send-to-Claude wiring.</p>
+      </details>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script>
+    (() => {
+      const vp = document.getElementById('viewport');
+      const world = document.getElementById('world');
+      const zlvl = document.getElementById('zlvl');
+      let tx = 0, ty = 0, s = 1;
+
+      const apply = () => {
+        world.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+        zlvl.textContent = Math.round(s * 100) + '%';
+      };
+
+      const WORLD = { x: -40, y: -60, w: 900, h: 820 };   // content bounds + margin
+      const fit = () => {
+        const r = vp.getBoundingClientRect();
+        s = Math.min(r.width / WORLD.w, r.height / WORLD.h, 1.6);
+        tx = (r.width - WORLD.w * s) / 2 - WORLD.x * s;
+        ty = (r.height - WORLD.h * s) / 2 - WORLD.y * s;
+        apply();
+      };
+
+      const zoomAt = (mx, my, factor) => {
+        const ns = Math.min(3, Math.max(0.15, s * factor));
+        tx = mx - (mx - tx) * (ns / s);
+        ty = my - (my - ty) * (ns / s);
+        s = ns; apply();
+      };
+
+      vp.addEventListener('wheel', e => {
+        e.preventDefault();
+        const r = vp.getBoundingClientRect();
+        zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+      }, { passive: false });
+
+      let drag = null;
+      vp.addEventListener('pointerdown', e => {
+        if (e.target.closest('.pin')) return;
+        drag = { x: e.clientX, y: e.clientY };
+        vp.classList.add('panning');
+        vp.setPointerCapture(e.pointerId);
+      });
+      vp.addEventListener('pointermove', e => {
+        if (!drag) return;
+        tx += e.clientX - drag.x; ty += e.clientY - drag.y;
+        drag = { x: e.clientX, y: e.clientY };
+        apply();
+      });
+      vp.addEventListener('pointerup', () => { drag = null; vp.classList.remove('panning'); });
+
+      document.getElementById('zfit').onclick = fit;
+      document.getElementById('z100').onclick = () => { s = 1; apply(); };
+      document.getElementById('zin').onclick = () => { const r = vp.getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1.25); };
+      document.getElementById('zout').onclick = () => { const r = vp.getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 0.8); };
+
+      // pins: click to toggle popover
+      document.querySelectorAll('[data-pin]').forEach(p => {
+        p.addEventListener('click', e => {
+          e.stopPropagation();
+          document.querySelectorAll('.pin.open').forEach(o => o !== p && o.classList.remove('open'));
+          p.classList.toggle('open');
+        });
+      });
+
+      // double-click drops a demo pin (not persisted)
+      let pinN = 2;
+      vp.addEventListener('dblclick', e => {
+        if (e.target.closest('.pin')) return;
+        const r = vp.getBoundingClientRect();
+        const wx = (e.clientX - r.left - tx) / s, wy = (e.clientY - r.top - ty) / s;
+        const pin = document.createElement('div');
+        pin.className = 'pin open'; pin.dataset.pin = '';
+        pin.style.left = wx + 'px'; pin.style.top = wy + 'px';
+        pin.innerHTML = `${++pinN}<div class="pop"><div class="who">you · demo pin</div>In the real Board this opens a comment box and lands in comments.json with x/y.</div>`;
+        pin.addEventListener('click', ev => { ev.stopPropagation(); pin.classList.toggle('open'); });
+        world.appendChild(pin);
+      });
+
+      // deep link: #frame-b → zoom to that frame
+      const target = location.hash && document.querySelector(`[data-cmt-id="${location.hash.slice(1)}"]`);
+      fit();
+      if (target) {
+        const fx = parseFloat(target.style.left), fy = parseFloat(target.style.top);
+        const fw = target.offsetWidth, fh = target.offsetHeight;
+        const r = vp.getBoundingClientRect();
+        s = Math.min(r.width / (fw + 160), r.height / (fh + 160), 2);
+        tx = (r.width - fw * s) / 2 - fx * s;
+        ty = (r.height - fh * s) / 2 - fy * s;
+        apply();
+        target.classList.add('focus');
+      }
+    })();
+  </script>
+</body>
+</html>

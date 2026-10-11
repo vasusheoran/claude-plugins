@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nav v2 — mobile-first review chrome</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    main.plan { max-width: 980px; }
+
+    /* ---------- phone simulator ---------- */
+    .simwrap { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+    .phone-sim { width: 310px; height: 640px; border: 2px solid var(--line-strong);
+      border-radius: 26px; background: var(--bg); position: relative; overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,.10); flex: none; }
+    .sim-cap { font: 11px var(--mono); color: var(--muted); margin-top: 10px; text-align: center; }
+
+    .sim-top { height: 46px; display: flex; align-items: center; gap: 8px;
+      padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+    .sim-top .title { font: 600 13px var(--sans); color: var(--ink); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    .sim-top .pages-chip { margin-left: auto; flex: none; font: 11px var(--mono);
+      border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 10px;
+      color: var(--ink); cursor: pointer; background: var(--bg-soft); }
+    .sim-top .pages-chip .dot { display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--open); margin-left: 5px; vertical-align: 1px; }
+
+    .sim-body { position: absolute; inset: 46px 0 56px; overflow: auto; padding: 12px; }
+    .sk { border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft);
+      margin-bottom: 10px; }
+    .sk.h26 { height: 26px; } .sk.h90 { height: 90px; } .sk.h120 { height: 120px; }
+    .sk.card { border-color: var(--ink); height: 150px; }
+
+    .sim-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
+      border-top: 1px solid var(--line); background: var(--bg); display: flex;
+      align-items: center; gap: 6px; padding: 0 10px; }
+    .sb-btn { flex: none; height: 38px; min-width: 42px; border: 1px solid var(--line-strong);
+      border-radius: 9px; background: var(--bg); font: 12px var(--mono); color: var(--ink);
+      display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px;
+      cursor: pointer; position: relative; }
+    .sb-btn .cnt { font: 10px var(--mono); background: var(--bg-soft);
+      border-radius: 999px; padding: 1px 6px; }
+    .sb-btn .bdot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px;
+      border-radius: 50%; background: var(--open); }
+    .sb-send { margin-left: auto; flex: 1; max-width: 150px; height: 40px;
+      border-radius: 10px; background: var(--accent); color: var(--bg);
+      font: 600 13px var(--sans); border: none; cursor: pointer; }
+
+    /* bottom sheets inside the sim */
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+      background: var(--bg); border-top: 1.5px solid var(--line-strong);
+      border-radius: 16px 16px 0 0; padding: 10px 14px 18px;
+      transform: translateY(105%); transition: transform .22s var(--ease);
+      box-shadow: 0 -8px 30px rgba(0,0,0,.14); }
+    .sheet.open { transform: translateY(0); }
+    .sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line-strong);
+      margin: 0 auto 12px; }
+    .sheet .srow { display: flex; align-items: center; gap: 10px; padding: 11px 6px;
+      border-radius: 8px; font: 13px var(--sans); color: var(--ink); cursor: pointer; }
+    .sheet .srow:active, .sheet .srow.cur { background: var(--bg-soft); }
+    .sheet .srow .kind { font: 11px var(--mono); color: var(--muted); width: 48px; }
+    .sheet .srow .badge { margin-left: auto; font: 10px var(--mono);
+      background: var(--ink); color: var(--bg); border-radius: 999px; padding: 2px 7px; }
+    .sheet .srow .chg { margin-left: auto; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--open); }
+    .sheet label { display: flex; gap: 8px; align-items: center; font: 13px var(--sans);
+      color: var(--ink); padding: 7px 4px; }
+    .sheet .ssum { font: 11px var(--mono); color: var(--muted); margin-bottom: 8px; }
+    .sheet .sbtn { width: 100%; height: 42px; border-radius: 10px; border: none;
+      background: var(--accent); color: var(--bg); font: 600 13px var(--sans);
+      margin-top: 8px; cursor: pointer; }
+    .scrim { position: absolute; inset: 0; z-index: 4; background: rgba(0,0,0,.25);
+      opacity: 0; pointer-events: none; transition: opacity .2s; }
+    .scrim.on { opacity: 1; pointer-events: auto; }
+
+    /* ---------- desktop strip mock ---------- */
+    .desk { border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
+    .desk-bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+      border-bottom: 1px solid var(--line); background: var(--bg); font: 12px var(--mono); }
+    .d-tab { padding: 5px 11px; border-radius: 7px; color: var(--muted); position: relative; }
+    .d-tab.cur { background: var(--bg-soft); color: var(--ink); font-weight: 600; }
+    .d-tab .chg { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--open); }
+    .d-sp { flex: 1; }
+    .d-status { font: 11px var(--mono); color: var(--muted); display: flex; gap: 6px;
+      align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+    .d-status .live { width: 7px; height: 7px; border-radius: 50%; background: var(--ink);
+      animation: pulse 2s infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .d-btn { border: 1px solid var(--line-strong); border-radius: 7px; padding: 5px 10px;
+      color: var(--ink); background: var(--bg); }
+    .d-send { background: var(--accent); color: var(--bg); border: none; border-radius: 7px;
+      padding: 6px 13px; font-weight: 600; }
+    .desk-body { height: 70px; background: var(--bg);
+      background-image: linear-gradient(var(--line) 1px, transparent 1px);
+      background-size: 100% 22px; }
+    .cap { font: 11px var(--mono); color: var(--muted); margin: 8px 0 0; }
+  </style>
+</head>
+<body data-approval="off" data-canvas-kind="mockup">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">MOCKUP — nav v2 proposal</span>
+      <span>Review chrome, mobile-first</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>Nav v2 — slim top, actions at your thumb</h1>
+
+    <section class="block" data-block-id="nav-intro" data-block-label="The proposal">
+      <p><strong>The phone below is interactive</strong> — tap <em>Pages ▾</em>,
+      tap <em>Send</em>, tap rows. Open this page on your actual phone
+      (same URL, LAN) to feel the sizes. Proposal: on narrow screens the single
+      top row splits into a slim title bar (top) and an action bar in the thumb
+      zone (bottom); panels become bottom sheets. The long activity text leaves
+      the bar entirely — it lives behind the bell, replaced by a short status
+      chip (see the Interaction tab).</p>
+    </section>
+
+    <section class="block" data-block-id="nav-phone" data-block-label="Mobile: two bars + sheets">
+      <h2>Mobile</h2>
+      <div class="simwrap">
+        <div>
+          <div class="phone-sim" id="sim">
+            <div class="sim-top">
+              <span class="title">Deck — the decision surface</span>
+              <span class="pages-chip" id="pageschip">Pages ▾<span class="dot"></span></span>
+            </div>
+            <div class="sim-body">
+              <div class="sk h26" style="width:55%"></div>
+              <div class="sk h26" style="width:85%"></div>
+              <div class="sk card"></div>
+              <div class="sk h90"></div>
+              <div class="sk h120"></div>
+              <div class="sk h90"></div>
+            </div>
+            <div class="sim-bottom">
+              <div class="sb-btn" title="Comment">💬</div>
+              <div class="sb-btn">🗨 <span class="cnt">2</span></div>
+              <div class="sb-btn">🔔<span class="bdot"></span></div>
+              <button class="sb-send" id="simsend">Send ↑</button>
+            </div>
+
+            <div class="scrim" id="scrim"></div>
+
+            <div class="sheet" id="sheet-pages">
+              <div class="grab"></div>
+              <div class="srow cur"><span class="kind">deck</span> Deck — the decision surface <span class="badge">2</span></div>
+              <div class="srow"><span class="kind">board</span> Board — mockups <span class="chg"></span></div>
+              <div class="srow"><span class="kind">plan</span> Canvas v2 — two surfaces</div>
+            </div>
+
+            <div class="sheet" id="sheet-send">
+              <div class="grab"></div>
+              <div class="ssum">2 comments · 3 questions answered</div>
+              <label><input type="radio" name="dec" checked> ✎ Request changes</label>
+              <label><input type="radio" name="dec"> ✓ Approve</label>
+              <button class="sbtn">Send to Claude</button>
+            </div>
+          </div>
+          <div class="sim-cap">tap Pages ▾ / Send — sheets slide from the bottom</div>
+        </div>
+        <div style="flex:1; min-width: 260px;">
+          <p>What moved where, and why:</p>
+          <ul>
+            <li><strong>Pages → a sheet.</strong> Tabs can't shrink four titles
+              into 390px. The top bar shows only <em>where you are</em>; the
+              sheet lists every page full-width with kind, comment badge, and a
+              changed-dot.</li>
+            <li><strong>Actions → bottom bar.</strong> Comment, comments panel,
+              activity, Send sit in the thumb zone, 40px+ targets. Send keeps
+              primary weight, always rightmost.</li>
+            <li><strong>Panels → bottom sheets.</strong> Comments panel, activity
+              feed, and the send popover all become sheets — one pattern,
+              draggable down to dismiss.</li>
+            <li><strong>Comment mode on touch:</strong> long-press an element =
+              what C-then-click is on desktop; text selection quoting unchanged.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="nav-desktop" data-block-label="Desktop: tidied top bar">
+      <h2>Desktop</h2>
+      <div class="desk">
+        <div class="desk-bar">
+          <span class="d-tab cur">▤ Canvas v2</span>
+          <span class="d-tab">Board<span class="chg"></span></span>
+          <span class="d-tab">Deck</span>
+          <span class="d-sp"></span>
+          <span class="d-status"><span class="live"></span> Claude is listening</span>
+          <span class="d-btn">💬 Comment</span>
+          <span class="d-btn">Comments 2</span>
+          <span class="d-btn">🔔</span>
+          <span class="d-send">Send to Claude</span>
+        </div>
+        <div class="desk-body"></div>
+      </div>
+      <p class="cap">Same bar as today, minus the clutter: short tab titles
+      (file-stem, full title on hover), changed-dots on tabs, the activity
+      sentence replaced by the status chip. One row, nothing wraps.</p>
+    </section>
+
+    <section class="block question" data-block-id="q-nav-mobile"
+             data-block-label="Mobile nav layout"
+             data-question-id="nav-mobile" data-question-mode="single">
+      <h3>Q · Mobile layout</h3>
+      <p>The split keeps context visible; a single bottom bar maximizes canvas
+      pixels but hides where you are.</p>
+      <div class="qopt" data-value="two-bar">Two bars — slim title top, actions bottom (as mocked)</div>
+      <div class="qopt" data-value="one-bottom">One bottom bar only — page name becomes a button in it, no top bar</div>
+      <div class="qopt" data-value="top-compact">Stay top-only — tabs collapse to a dropdown, actions shrink to icons</div>
+    </section>
+
+    <section class="block question" data-block-id="q-nav-desktop"
+             data-block-label="Desktop nav"
+             data-question-id="nav-desktop" data-question-mode="single">
+      <h3>Q · Desktop</h3>
+      <p>Breakpoint ~720px either way.</p>
+      <div class="qopt" data-value="tidied-top">Tidied top bar (as mocked) — desktop keeps tabs visible</div>
+      <div class="qopt" data-value="bottom-everywhere">Bottom action bar everywhere — identical chrome on all sizes</div>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script>
+    (() => {
+      const scrim = document.getElementById('scrim');
+      const sheets = { pages: document.getElementById('sheet-pages'),
+                       send: document.getElementById('sheet-send') };
+      const close = () => { Object.values(sheets).forEach(s => s.classList.remove('open'));
+                            scrim.classList.remove('on'); };
+      const open = k => { close(); sheets[k].classList.add('open'); scrim.classList.add('on'); };
+      document.getElementById('pageschip').onclick = () => open('pages');
+      document.getElementById('simsend').onclick = () => open('send');
+      scrim.onclick = close;
+      sheets.pages.querySelectorAll('.srow').forEach(r => r.onclick = close);
+      sheets.send.querySelector('.sbtn').onclick = close;
+    })();
+  </script>
+</body>
+</html>

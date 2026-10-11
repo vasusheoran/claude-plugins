@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canvas v2 — two surfaces</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    .verdict { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+    .chip { border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 14px;
+      background: var(--bg-soft); min-width: 120px; }
+    .chip .l { font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); }
+    .chip .v { font: 600 13px var(--sans); color: var(--ink); margin-top: 2px; }
+    .chip.accent { border-color: var(--accent); background: var(--accent-ghost); }
+    .chip.accent .v { color: var(--accent); }
+    .tabs-cta { display: flex; gap: 10px; margin: 14px 0 22px; }
+    .tabs-cta a { flex: 1; text-decoration: none; border: 1.5px solid var(--accent);
+      border-radius: 9px; padding: 12px 14px; background: var(--accent-ghost); }
+    .tabs-cta a .t { font: 600 14px var(--sans); color: var(--accent); }
+    .tabs-cta a .d { font: 11px var(--sans); color: var(--muted); margin-top: 2px; }
+    details.why { margin-top: 8px; }
+    details.why summary { font: 11px var(--mono); color: var(--muted); cursor: pointer; }
+    details.why p { font: 12px/1.5 var(--sans); color: var(--muted); margin: 6px 0 0; }
+    .settled details { border-left: 2px solid var(--decision); padding-left: 10px; margin: 6px 0; }
+    .settled summary { font: 13px var(--sans); color: var(--ink); cursor: pointer; }
+    .settled summary::before { content: "✓ "; color: var(--decision); font-weight: 700; }
+    .settled p { font: 12px/1.5 var(--sans); color: var(--muted); margin: 6px 0 2px; }
+  </style>
+</head>
+<body data-canvas-kind="plan">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">PLAN — awaiting review</span>
+      <span>Created 2026-10-11</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>Canvas v2 — a tool for deciding, split into two surfaces</h1>
+
+    <section class="block" data-block-id="verdict" data-block-label="Verdict">
+      <div class="verdict">
+        <div class="chip"><div class="l">Problem</div><div class="v">Deciding = reading essays</div></div>
+        <div class="chip accent"><div class="l">Proposal</div><div class="v">Two surfaces</div></div>
+        <div class="chip"><div class="l">Deck</div><div class="v">Answer — visual cards, one in focus</div></div>
+        <div class="chip"><div class="l">Board</div><div class="v">Look — Figma-like frames + pins</div></div>
+      </div>
+      <div class="tabs-cta">
+        <a href="deck.html"><div class="t">▶ Try the Deck mockup</div><div class="d">clickable — pick with 1/2/3, watch it advance</div></a>
+        <a href="board.html"><div class="t">▶ Try the Board mockup</div><div class="d">drag, zoom, click pins, dbl-click to drop one</div></a>
+      </div>
+      <p>Decisions arrive as a <strong>Deck</strong>; anything worth looking at
+      (mockups, diagrams, flows) lives on a <strong>Board</strong> the Deck's
+      option cards deep-link into. Try both tabs first — the questions below
+      assume you have.</p>
+    </section>
+
+    <section class="block question" data-block-id="q-taxonomy"
+             data-block-label="Mode taxonomy"
+             data-question-id="taxonomy" data-question-mode="single">
+      <h3>1 · What happens to today's five modes?</h3>
+      <p>Replacing is cleaner to explain publicly; keeping modes is less churn
+      in references and muscle memory.</p>
+      <div class="qopt" data-value="replace">Replace — plan/decide become Deck (plan = gated Deck), mockup/diagram become Board, doc stays</div>
+      <div class="qopt" data-value="additive">Keep the five modes — Board added as a sixth, plan/decide re-rendered deck-style</div>
+    </section>
+
+    <section class="block question" data-block-id="q-lean"
+             data-block-label="Lean visibility"
+             data-question-id="lean-visibility" data-question-mode="single">
+      <h3>2 · Is Claude's pick visible on option cards?</h3>
+      <p>Today's rule hides the lean so "You decide, Claude" stays honest.
+      Showing it is faster but anchors you. The Deck mockup's toggle demos both.</p>
+      <div class="qopt" data-value="shown">Shown — badge on the card + "accept remaining picks" button</div>
+      <div class="qopt" data-value="neutral">Neutral — options stay unmarked; lean only applied on defer</div>
+      <div class="qopt" data-value="on-demand">On demand — hidden until I press a "show leans" control per deck</div>
+    </section>
+
+    <section class="block question" data-block-id="q-focus"
+             data-block-label="Deck focus model"
+             data-question-id="deck-focus" data-question-mode="single">
+      <h3>3 · One decision in focus, or all open at once?</h3>
+      <p>Focus kills the "wall of questions" feel; all-open suits reviewers who
+      skim the whole deck before answering.</p>
+      <div class="qopt" data-value="stepper">Focused — current expanded, answered collapse to ✓ rows, rest dimmed (as mocked)</div>
+      <div class="qopt" data-value="all-open">All open — every card expanded, progress rail still tracks</div>
+    </section>
+
+    <section class="block question" data-block-id="q-pins"
+             data-block-label="Board comments"
+             data-question-id="board-pins" data-question-mode="single">
+      <h3>4 · Board comments: pins at a point?</h3>
+      <p>Pins need a comment-schema extension (x/y + frame id in comments.json)
+      and daemon-served UI; element comments already work everywhere.</p>
+      <div class="qopt" data-value="pins">Pins — click a spot on a frame, Figma-style (as mocked)</div>
+      <div class="qopt" data-value="element">Element comments only — comment on a frame as a whole, no x/y</div>
+    </section>
+
+    <section class="block settled" data-block-id="settled" data-block-label="Settled (reopen by commenting)">
+      <h3>Settled</h3>
+      <details><summary>Sep-5 "decision-first" spec is absorbed, not pre-implemented</summary>
+        <p>Its components (verdict strip, settled rows, word budgets, meter) become
+        Deck/doc internals in this redesign. Implementing it first would build the
+        document anatomy v2 replaces.</p></details>
+      <details><summary>Still zero dependencies — stdlib Python + vanilla JS</summary>
+        <p>Board pan/zoom is ~80 lines of vanilla JS (proven in the mockup).
+        Staying dependency-free keeps the public story ("nothing to install") and
+        the offline guarantee.</p></details>
+      <details><summary>Thumbnails start hand-drawn; live Board snapshots later</summary>
+        <p>Deck option cards get Claude-authored mini-wireframes v1; scaled iframe
+        snapshots of Board frames are an upgrade, not a blocker.</p></details>
+      <details><summary>Public packaging is a later phase</summary>
+        <p>v2 is designed clean-for-release (no personal paths in assets), but
+        install docs / repo split / naming wait until the tool itself lands.</p></details>
+    </section>
+
+    <section class="block" data-block-id="ask" data-block-label="The ask">
+      <h3>The ask</h3>
+      <p>Play with both mockup tabs, answer the four questions (defer any),
+      pin/comment what feels wrong, then approve. Approval here green-lights a
+      written spec for the v2 build — no code before that spec is reviewed.</p>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+</body>
+</html>

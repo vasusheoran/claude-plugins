@@ -1,0 +1,6 @@
+{
+  "decidedAt": "2026-10-10T23:17:51.204490+00:00",
+  "by": "Claude",
+  "message": "Round 2 folded into spec.md (\u00a72b): bottom action bar at every width, two-bar mobile layout (your defer \u2192 my lean), all panels as bottom sheets, presence chip (3-state), page changed-dots, deck finish prompt. The three interaction questions you left blank were taken as leans \u2014 veto in the spec review if any is wrong.",
+  "ackedAt": "2026-10-10T23:19:07.123883+00:00"
+}

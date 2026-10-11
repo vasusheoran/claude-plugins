@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deck — the decision surface</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    main.plan { max-width: 880px; }
+
+    /* progress rail */
+    .rail { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px;
+      font: 11px var(--mono); color: var(--muted); }
+    .rail .seg { height: 6px; flex: 1; border-radius: 3px; background: var(--bg-soft);
+      border: 1px solid var(--line); transition: all .2s var(--ease); }
+    .rail .seg.done { background: var(--decision); border-color: var(--decision); }
+    .rail .seg.cur { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ghost); }
+    .rail .count { white-space: nowrap; }
+
+    /* deck cards */
+    .dk { border: 1px solid var(--line-strong); border-radius: 10px; margin: 14px 0;
+      overflow: hidden; transition: all .25s var(--ease); }
+    .dk .dk-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+      font: 600 14px var(--sans); color: var(--ink); cursor: pointer; }
+    .dk .dk-num { font: 11px var(--mono); color: var(--muted); }
+    .dk .dk-choice { margin-left: auto; font: 12px var(--mono); color: var(--decision); }
+    .dk.answered { border-color: var(--line); background: var(--bg-soft); }
+    .dk.answered .dk-head::before { content: "✓"; color: var(--decision); font-weight: 700; }
+    .dk.upcoming { opacity: .55; }
+    .dk.current { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ghost); }
+    .dk .dk-body { padding: 0 16px 16px; }
+    .dk:not(.current) .dk-body { display: none; }
+    .dk .dk-why { font: 13px/1.55 var(--sans); color: var(--muted); margin: 0 0 12px; }
+
+    /* visual option cards */
+    .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .opt { border: 1.5px solid var(--line-strong); border-radius: 9px; cursor: pointer;
+      background: var(--bg); overflow: hidden; position: relative;
+      transition: all .15s var(--ease); }
+    .opt:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .opt.picked { border-color: var(--decision); box-shadow: 0 0 0 3px color-mix(in oklab, var(--decision) 18%, transparent); }
+    .opt .key { position: absolute; top: 8px; left: 8px; z-index: 2; width: 18px; height: 18px;
+      border: 1px solid var(--line-strong); border-radius: 4px; background: var(--bg);
+      font: 11px/16px var(--mono); text-align: center; color: var(--muted); }
+    .opt .thumb { height: 120px; background: var(--bg-soft); border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: center; position: relative; }
+    .opt .thumb .goboard { position: absolute; right: 6px; bottom: 6px; font: 10px var(--mono);
+      color: var(--accent); background: var(--bg); border: 1px solid var(--line);
+      border-radius: 4px; padding: 2px 6px; text-decoration: none; }
+    .opt .meta { padding: 9px 11px; }
+    .opt .t { font: 600 13px var(--sans); color: var(--ink); }
+    .opt .d { font: 11px/1.45 var(--sans); color: var(--muted); margin-top: 3px; }
+    .opt .lean-badge { display: none; position: absolute; top: 8px; right: 8px; z-index: 2;
+      font: 600 9px var(--mono); letter-spacing: .06em; color: var(--bg);
+      background: var(--accent); border-radius: 4px; padding: 3px 6px; }
+    body.show-lean .opt.lean .lean-badge { display: block; }
+    body.show-lean .opt.lean { border-color: var(--accent-line); }
+
+    /* micro-wireframes in thumbs */
+    .mini { width: 64px; height: 104px; border: 1.5px solid var(--line-strong);
+      border-radius: 6px; background: var(--bg); display: flex; flex-direction: column;
+      overflow: hidden; }
+    .mini i { display: block; }
+    .mini .b { flex: 1; padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+    .mini .r { height: 8px; border-radius: 2px; background: var(--bg-soft); border: 1px solid var(--line); }
+    .mini .r.a { background: var(--accent-ghost); border-color: var(--accent); }
+    .mini .tb { height: 10px; border-top: 1px solid var(--line); display: flex; }
+    .mini .tb i { flex: 1; } .mini .tb i.on { background: var(--accent-ghost); }
+
+    /* footer controls */
+    .deckfoot { display: flex; align-items: center; gap: 14px; margin: 18px 0;
+      font: 11px var(--mono); color: var(--muted); }
+    .deckfoot button { font: 12px var(--mono); border: 1px solid var(--accent);
+      color: var(--accent); background: var(--accent-ghost); border-radius: 6px;
+      padding: 6px 12px; cursor: pointer; }
+    .deckfoot .kbd { border: 1px solid var(--line-strong); border-radius: 4px;
+      background: var(--bg-soft); padding: 1px 5px; }
+
+    /* lean-mode toggle (demo control) */
+    .demo-toggle { display: flex; gap: 0; border: 1px solid var(--line-strong);
+      border-radius: 6px; overflow: hidden; font: 11px var(--mono); margin-left: auto; }
+    .demo-toggle span { padding: 5px 10px; cursor: pointer; color: var(--muted); }
+    .demo-toggle span.on { background: var(--accent); color: var(--bg); }
+    .done-banner { display: none; border: 1px solid var(--decision); background: var(--decision-bg);
+      color: var(--decision); border-radius: 9px; padding: 12px 16px; font: 13px var(--sans); }
+    body.alldone .done-banner { display: block; }
+  </style>
+</head>
+<body data-approval="off" data-canvas-kind="mockup" class="show-lean">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">MOCKUP — concept, not built</span>
+      <span>Deck: the "answering" surface</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>Deck — one decision in focus at a time</h1>
+
+    <section class="block" data-block-id="deck-intro" data-block-label="What the Deck is">
+      <p><strong>This mockup works — click an option (or press 1/2/3) and watch
+      the deck advance.</strong> One decision is in focus; answered ones collapse
+      to a ✓ row; upcoming ones wait dimmed. Options are pictures first, words
+      second. Thumbnails deep-link to the Board tab. The toggle (right) previews
+      an open design question: should Claude's lean be visible, or stay hidden
+      so "You decide" stays honest?</p>
+    </section>
+
+    <section class="block" data-block-id="deck-demo" data-block-label="The deck itself">
+
+      <div class="rail">
+        <span class="count" id="railcount">0 / 3 answered</span>
+        <div class="seg cur" data-seg></div>
+        <div class="seg" data-seg></div>
+        <div class="seg" data-seg></div>
+        <div class="demo-toggle" id="leantoggle">
+          <span class="on" data-lean="1">lean shown</span><span data-lean="0">neutral</span>
+        </div>
+      </div>
+
+      <!-- D1 -->
+      <div class="dk current" data-dk>
+        <div class="dk-head"><span class="dk-num">1</span> Where does Help live?
+          <span class="dk-choice"></span></div>
+        <div class="dk-body">
+          <p class="dk-why">A tab costs nav real estate; Settings-nesting is where
+          users already look; contextual ?s need per-screen work.</p>
+          <div class="opts">
+            <div class="opt" data-val="Help tab">
+              <span class="key">1</span>
+              <div class="thumb">
+                <div class="mini"><i style="height:4px"></i><div class="b"><div class="r a"></div><div class="r"></div><div class="r"></div></div><div class="tb"><i></i><i></i><i class="on"></i><i></i></div></div>
+                <a class="goboard" href="board.html#frame-a">⤢ Board</a>
+              </div>
+              <div class="meta"><div class="t">Help tab</div><div class="d">Always one tap away; eats a nav slot.</div></div>
+            </div>
+            <div class="opt lean" data-val="Inside Settings">
+              <span class="key">2</span><span class="lean-badge">CLAUDE'S PICK</span>
+              <div class="thumb">
+                <div class="mini"><i style="height:4px"></i><div class="b"><div class="r"></div><div class="r"></div><div class="r a"></div><div class="r"></div></div><div class="tb"><i></i><i></i><i class="on"></i></div></div>
+                <a class="goboard" href="board.html#frame-b">⤢ Board</a>
+              </div>
+              <div class="meta"><div class="t">Inside Settings</div><div class="d">Zero nav cost; two taps deep.</div></div>
+            </div>
+            <div class="opt" data-val="Contextual ?">
+              <span class="key">3</span>
+              <div class="thumb">
+                <div class="mini"><i style="height:4px"></i><div class="b"><div class="r"></div><div class="r a"></div><div class="r"></div></div><div class="tb"><i></i><i class="on"></i><i></i></div></div>
+                <a class="goboard" href="board.html#frame-c">⤢ Board</a>
+              </div>
+              <div class="meta"><div class="t">Contextual ?</div><div class="d">Help where confusion happens; most build work.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- D2 -->
+      <div class="dk upcoming" data-dk>
+        <div class="dk-head"><span class="dk-num">2</span> Help content format
+          <span class="dk-choice"></span></div>
+        <div class="dk-body">
+          <p class="dk-why">Static FAQ ships this week; search needs an index;
+          chat-style needs backend none of this justifies yet.</p>
+          <div class="opts">
+            <div class="opt lean" data-val="FAQ accordion">
+              <span class="key">1</span><span class="lean-badge">CLAUDE'S PICK</span>
+              <div class="thumb"><div class="mini"><div class="b"><div class="r a"></div><div class="r"></div><div class="r"></div><div class="r"></div><div class="r"></div></div></div></div>
+              <div class="meta"><div class="t">FAQ accordion</div><div class="d">10 questions, static, Hindi+English.</div></div>
+            </div>
+            <div class="opt" data-val="Searchable articles">
+              <span class="key">2</span>
+              <div class="thumb"><div class="mini"><div class="b"><div class="r a"></div><div class="r"></div><div class="r"></div></div></div></div>
+              <div class="meta"><div class="t">Searchable articles</div><div class="d">Scales; needs index + authoring.</div></div>
+            </div>
+            <div class="opt" data-val="Guided chat">
+              <span class="key">3</span>
+              <div class="thumb"><div class="mini"><div class="b"><div class="r"></div><div class="r a" style="margin-left:14px"></div><div class="r"></div></div></div></div>
+              <div class="meta"><div class="t">Guided chat</div><div class="d">Nicest UX; real backend work.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- D3 -->
+      <div class="dk upcoming" data-dk>
+        <div class="dk-head"><span class="dk-num">3</span> Blocked-page "Why?" deep link
+          <span class="dk-choice"></span></div>
+        <div class="dk-body">
+          <p class="dk-why">The flow frame on the Board shows where this sits —
+          it's the highest-traffic entry into help.</p>
+          <div class="opts" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="opt lean" data-val="Ship with v1">
+              <span class="key">1</span><span class="lean-badge">CLAUDE'S PICK</span>
+              <div class="thumb"><div class="mini"><div class="b"><div class="r"></div><div class="r a"></div></div></div><a class="goboard" href="board.html#frame-flow">⤢ Board</a></div>
+              <div class="meta"><div class="t">Ship with v1</div><div class="d">One link on a page we own.</div></div>
+            </div>
+            <div class="opt" data-val="Later">
+              <span class="key">2</span>
+              <div class="thumb"><div class="mini"><div class="b"><div class="r"></div><div class="r"></div></div></div></div>
+              <div class="meta"><div class="t">Later</div><div class="d">Keep v1 to the help surface only.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="done-banner">All decisions answered — in the real Deck the
+        <strong>Send to Claude</strong> bar lights up here, bundling answers +
+        comments (+ approval on gated decks) into one submission.</div>
+
+      <div class="deckfoot">
+        <button id="acceptleans">Accept Claude's picks for the rest</button>
+        <span><span class="kbd">1</span>–<span class="kbd">3</span> pick · click a ✓ row to reopen</span>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="deck-mechanics" data-block-label="What ships vs what's shown">
+      <details>
+        <summary>What's real in the concept vs faked in this mockup</summary>
+        <p>Real: focus/advance behavior, keyboard pick, visual option cards with
+        thumbnails (hand-drawn divs or scaled iframe snapshots of Board frames),
+        Board deep links, accept-remaining-leans, progress rail. Answers would
+        flow through the existing <code>answers.json</code> + Send-to-Claude
+        machinery unchanged. Faked here: persistence and the submit bar. The
+        lean/neutral toggle is a design question on the Plan tab, not a shipped
+        control.</p>
+      </details>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script>
+    (() => {
+      const dks = [...document.querySelectorAll('[data-dk]')];
+      const segs = [...document.querySelectorAll('[data-seg]')];
+      const count = document.getElementById('railcount');
+
+      const refresh = () => {
+        const answered = dks.filter(d => d.classList.contains('answered')).length;
+        count.textContent = `${answered} / ${dks.length} answered`;
+        const cur = dks.find(d => !d.classList.contains('answered'));
+        dks.forEach(d => {
+          d.classList.remove('current', 'upcoming');
+          if (d === cur) d.classList.add('current');
+          else if (!d.classList.contains('answered')) d.classList.add('upcoming');
+        });
+        segs.forEach((s, i) => {
+          s.className = 'seg' + (dks[i].classList.contains('answered') ? ' done' : (dks[i] === cur ? ' cur' : ''));
+        });
+        document.body.classList.toggle('alldone', answered === dks.length);
+      };
+
+      const pick = (dk, opt) => {
+        dk.querySelectorAll('.opt').forEach(o => o.classList.remove('picked'));
+        opt.classList.add('picked');
+        dk.classList.add('answered');
+        dk.querySelector('.dk-choice').textContent = opt.dataset.val;
+        refresh();
+      };
+
+      dks.forEach(dk => {
+        dk.querySelectorAll('.opt').forEach(opt => {
+          opt.addEventListener('click', e => {
+            if (e.target.closest('.goboard')) return;
+            if (!dk.classList.contains('current') && !dk.classList.contains('answered')) return;
+            pick(dk, opt);
+          });
+        });
+        dk.querySelector('.dk-head').addEventListener('click', () => {
+          if (dk.classList.contains('answered')) {       // reopen
+            dk.classList.remove('answered');
+            dk.querySelector('.dk-choice').textContent = '';
+            refresh();
+          }
+        });
+      });
+
+      document.addEventListener('keydown', e => {
+        if (/^[1-3]$/.test(e.key) && !e.target.closest('input,textarea')) {
+          const cur = dks.find(d => d.classList.contains('current'));
+          const opt = cur && cur.querySelectorAll('.opt')[+e.key - 1];
+          if (opt) pick(cur, opt);
+        }
+      });
+
+      document.getElementById('acceptleans').onclick = () => {
+        dks.filter(d => !d.classList.contains('answered')).forEach(dk => {
+          const lean = dk.querySelector('.opt.lean') || dk.querySelector('.opt');
+          pick(dk, lean);
+        });
+      };
+
+      document.getElementById('leantoggle').addEventListener('click', e => {
+        const t = e.target.closest('[data-lean]'); if (!t) return;
+        document.querySelectorAll('#leantoggle span').forEach(s => s.classList.remove('on'));
+        t.classList.add('on');
+        document.body.classList.toggle('show-lean', t.dataset.lean === '1');
+      });
+
+      refresh();
+    })();
+  </script>
+</body>
+</html>

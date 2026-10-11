@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interaction — the Claude ↔ reviewer loop</title>
+  <link rel="stylesheet" href="plan.css" />
+  <style>
+    main.plan { max-width: 880px; }
+    .chips { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; }
+    .pstate { border: 1px solid var(--line-strong); border-radius: 10px; padding: 12px 14px;
+      flex: 1; min-width: 200px; }
+    .pstate .chip { display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px;
+      font: 11px var(--mono); color: var(--ink); background: var(--bg); }
+    .pstate .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+    .pstate .chip .dot.pulse { animation: pulse 2s infinite; }
+    .pstate .chip .dot.off { background: var(--resolved); }
+    @keyframes pulse { 50% { opacity: .25; } }
+    .pstate .when { font: 11px/1.5 var(--sans); color: var(--muted); margin-top: 8px; }
+    .mini-tabs { display: inline-flex; gap: 4px; border: 1px solid var(--line);
+      border-radius: 8px; padding: 4px; font: 11px var(--mono); }
+    .mini-tabs span { padding: 4px 10px; border-radius: 5px; color: var(--muted); position: relative; }
+    .mini-tabs span.cur { background: var(--bg-soft); color: var(--ink); }
+    .mini-tabs span .chg { position: absolute; top: 1px; right: 1px; width: 6px;
+      height: 6px; border-radius: 50%; background: var(--open); }
+    .prompt-mock { border: 1.5px solid var(--ink); border-radius: 12px; padding: 12px 16px;
+      max-width: 330px; background: var(--bg); box-shadow: 0 6px 20px rgba(0,0,0,.10); }
+    .prompt-mock .t { font: 600 13px var(--sans); color: var(--ink); }
+    .prompt-mock .d { font: 11px var(--sans); color: var(--muted); margin: 3px 0 10px; }
+    .prompt-mock .row { display: flex; gap: 8px; }
+    .prompt-mock button { flex: 1; height: 34px; border-radius: 8px; font: 12px var(--sans);
+      cursor: default; }
+    .prompt-mock .go { background: var(--accent); color: var(--bg); border: none; font-weight: 600; }
+    .prompt-mock .no { background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); }
+  </style>
+</head>
+<body data-approval="off" data-canvas-kind="doc">
+  <main class="plan">
+
+    <div class="banner">
+      <span class="status draft">PROPOSAL — interaction loop v2</span>
+      <span>How we work together on a canvas</span>
+      <span>Author: Claude</span>
+    </div>
+
+    <h1>The loop — you should always know what Claude is doing</h1>
+
+    <section class="block" data-block-id="loop-today" data-block-label="The loop today">
+      <h2>Today's loop</h2>
+      <script type="application/json" data-diagram>
+      {
+        "type": "sequence",
+        "participants": [
+          { "id": "p-you", "label": "You (browser)" },
+          { "id": "p-daemon", "label": "canvasd" },
+          { "id": "p-claude", "label": "Claude" }
+        ],
+        "messages": [
+          { "id": "m-author", "from": "p-claude", "to": "p-daemon", "label": "authors pages, opens canvas" },
+          { "id": "m-review", "from": "p-you", "to": "p-daemon", "label": "comments + answers (drafts)" },
+          { "id": "m-send", "from": "p-you", "to": "p-daemon", "label": "Send to Claude (one bundle)" },
+          { "id": "m-wake", "from": "p-daemon", "to": "p-claude", "label": "canvas_wait wakes" },
+          { "id": "m-edit", "from": "p-claude", "to": "p-daemon", "label": "edits pages · resolves · replies · ack" },
+          { "id": "m-refresh", "from": "p-daemon", "to": "p-you", "label": "live refresh + 🔔", "style": "return" }
+        ]
+      }
+      </script>
+      <p>The gap: between your Send and the 🔔, the page tells you almost
+      nothing — you can't see whether Claude is even listening, and after an
+      edit you can't see <em>which pages</em> changed without walking them.</p>
+    </section>
+
+    <section class="block" data-block-id="presence" data-block-label="Proposal: presence chip">
+      <h2>1 · Presence chip</h2>
+      <p>The daemon already knows when Claude is blocked on
+      <code>canvas_wait</code> — that becomes an honest status, no new
+      protocol. One chip in the nav, three states:</p>
+      <div class="chips">
+        <div class="pstate"><span class="chip"><span class="dot pulse"></span>Claude is listening</span>
+          <div class="when">a canvas_wait is open — your Send wakes it instantly</div></div>
+        <div class="pstate"><span class="chip"><span class="dot"></span>Applying your feedback ✍</span>
+          <div class="when">submission picked up, no ack yet — Claude is working</div></div>
+        <div class="pstate"><span class="chip"><span class="dot off"></span>Away · last seen 14:02</span>
+          <div class="when">no wait open — Send still queues, Claude reads it on return</div></div>
+      </div>
+    </section>
+
+    <section class="block" data-block-id="changes" data-block-label="Proposal: changed-dots">
+      <h2>2 · What changed since you last looked</h2>
+      <p>When Claude edits a page, its tab (and its row in the mobile Pages
+      sheet) gets a dot until you visit it. Per-page, cleared on view:</p>
+      <p><span class="mini-tabs"><span class="cur">Canvas v2</span><span>Board<span class="chg"></span></span><span>Deck<span class="chg"></span></span></span></p>
+      <p>Claude's side of the contract: after an edit round, the ack names the
+      pages it touched — the dots show <em>where</em>, the ack says
+      <em>what</em>.</p>
+    </section>
+
+    <section class="block" data-block-id="autosend" data-block-label="Proposal: finish prompt">
+      <h2>3 · Deck finish prompt</h2>
+      <p>On a deck, when the last question is answered, a one-tap prompt
+      appears (never auto-sends; dismiss keeps drafting):</p>
+      <div class="prompt-mock">
+        <div class="t">All 4 decisions answered</div>
+        <div class="d">2 comments will ride along.</div>
+        <div class="row"><button class="no">Keep reviewing</button>
+          <button class="go">Send to Claude ↑</button></div>
+      </div>
+    </section>
+
+    <section class="block question" data-block-id="q-presence"
+             data-block-label="Presence chip"
+             data-question-id="presence" data-question-mode="single">
+      <h3>Q · Presence chip</h3>
+      <p>Costs a tiny daemon change (track open waits); purely local.</p>
+      <div class="qopt" data-value="three-state">Three states incl. "away · last seen" (as shown)</div>
+      <div class="qopt" data-value="binary">Binary only — listening / not, no timestamps</div>
+      <div class="qopt" data-value="none">No presence — keep the bar quieter</div>
+    </section>
+
+    <section class="block question" data-block-id="q-change-markers"
+             data-block-label="Change markers"
+             data-question-id="change-markers" data-question-mode="single">
+      <h3>Q · Change markers</h3>
+      <p>Block-level highlighting ("these 3 sections changed") is possible but
+      heavier — the daemon would diff DOM block ids per edit.</p>
+      <div class="qopt" data-value="page-dots">Page-level dots (as shown) — cheap, clear</div>
+      <div class="qopt" data-value="block-marks">Block-level — changed sections get an edge marker too</div>
+      <div class="qopt" data-value="none">Neither — the ack text is enough</div>
+    </section>
+
+    <section class="block question" data-block-id="q-finish-prompt"
+             data-block-label="Deck finish prompt"
+             data-question-id="finish-prompt" data-question-mode="single">
+      <h3>Q · Deck finish prompt</h3>
+      <div class="qopt" data-value="prompt">Yes — one-tap send sheet when the deck completes</div>
+      <div class="qopt" data-value="no-prompt">No — the lit-up Send button is enough</div>
+    </section>
+
+  </main>
+  <script src="comments.js"></script>
+  <script src="diagram.js"></script>
+</body>
+</html>
