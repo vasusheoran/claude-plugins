@@ -231,7 +231,14 @@ def make_tools(registry, assets_dir, base_url):
                       WAIT_MAX_TIMEOUT)
         kinds = None if args.get("events") == "any" else {"submission",
                                                           "approval"}
-        r = cls.bus.wait(since=since, kinds=kinds, timeout=timeout)
+        with cls.presence_lock:
+            cls.presence["waits"] += 1
+        try:
+            r = cls.bus.wait(since=since, kinds=kinds, timeout=timeout)
+        finally:
+            with cls.presence_lock:
+                cls.presence["waits"] -= 1
+                cls.presence["lastClosedAt"] = serve._now()
         approval = cls.approval.get()
         submission = _latest_submitted(cls)
         pickup = "picked up — reading the feedback now"

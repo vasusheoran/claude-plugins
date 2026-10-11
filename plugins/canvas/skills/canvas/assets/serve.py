@@ -426,6 +426,8 @@ def make_handler(plan_dir, assets_dir=None):
     ack = AckStore(plan_dir / "ack.json")
     activity = ActivityStore(plan_dir / "activity.json")
     bus = EventBus()
+    presence = {"waits": 0, "lastClosedAt": None}
+    presence_lock = threading.Lock()
 
     # Last-seen page digests for server-side page-updated detection. Lazily
     # initialized on the first /api/version (no event emitted then); a later
@@ -493,6 +495,7 @@ def make_handler(plan_dir, assets_dir=None):
                     "ack": _digest(plan_dir / "ack.json"),
                     "activity": _digest(plan_dir / "activity.json"),
                     "pages": pages,
+                    "presence": dict(presence),
                 })
             if path == "/api/pages":
                 return self._json(200, {"pages": _list_pages(plan_dir)})
@@ -592,6 +595,8 @@ def make_handler(plan_dir, assets_dir=None):
     Handler.ack = ack
     Handler.activity = activity
     Handler.bus = bus
+    Handler.presence = presence
+    Handler.presence_lock = presence_lock
     return Handler
 
 

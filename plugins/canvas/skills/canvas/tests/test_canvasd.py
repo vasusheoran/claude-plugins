@@ -493,6 +493,22 @@ class CanvasWaitTests(McpToolsCase):
         self.assertEqual(ack["by"], "Claude")
 
 
+class CanvasPresenceTests(McpToolsCase):
+    def test_version_payload_carries_presence(self):
+        status, body = _get(f"{self.base}/w/{self.key}/api/version")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["presence"],
+                         {"waits": 0, "lastClosedAt": None})
+
+    def test_canvas_wait_tracks_open_waits(self):
+        cls = self.httpd.registry.handler_for(self.key, self.assets)
+        err, out = self.call("canvas_wait", {
+            "dir": str(self.ws), "since": 10**9, "timeout": 0})
+        self.assertFalse(err)
+        self.assertEqual(cls.presence["waits"], 0)          # released
+        self.assertIsNotNone(cls.presence["lastClosedAt"])  # stamped
+
+
 class CanvasResolveAckTests(McpToolsCase):
     def test_resolve_marks_comments_resolved(self):
         _, created = _json_req(

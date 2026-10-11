@@ -11,7 +11,7 @@ const assert = require("assert");
 const {
   apiBase, tabHref,
   normalizeState, groupComments, feedIcon, sendCount, seenChip,
-  tabIcon, pageKind, answeredValue, budgetFor, wordCount,
+  tabIcon, pageKind, answeredValue, budgetFor, wordCount, presenceState,
 } = require("../assets/comments.js");
 
 let passed = 0, failed = 0;
@@ -221,6 +221,27 @@ test("wordCount splits on whitespace, ignores empties", () => {
   assert.strictEqual(wordCount("  one two\n three "), 3);
   assert.strictEqual(wordCount(""), 0);
   assert.strictEqual(wordCount(null), 0);
+});
+
+test("presenceState: null payload -> null (review focus #5)", () => {
+  assert.strictEqual(presenceState(undefined, []), null);
+  assert.strictEqual(presenceState(null, []), null);
+});
+test("presenceState: open wait -> listening", () => {
+  assert.deepStrictEqual(
+    presenceState({ waits: 1, lastClosedAt: null }, []), { state: "listening" });
+});
+test("presenceState: picked-up after last ack -> applying", () => {
+  const a = [{ kind: "picked-up", at: "2026-10-11T10:00:00" },
+             { kind: "acked", at: "2026-10-11T09:00:00" }];
+  assert.deepStrictEqual(
+    presenceState({ waits: 0, lastClosedAt: "x" }, a), { state: "applying" });
+});
+test("presenceState: otherwise away with lastSeen", () => {
+  assert.deepStrictEqual(
+    presenceState({ waits: 0, lastClosedAt: "2026-10-11T10:05:00" },
+                  [{ kind: "acked", at: "2026-10-11T10:00:00" }]),
+    { state: "away", lastSeen: "2026-10-11T10:05:00" });
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

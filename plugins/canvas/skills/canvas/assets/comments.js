@@ -118,13 +118,28 @@
     return m ? m.length : 0;
   }
 
+  // Presence chip state from the daemon's open canvas_wait + activity:
+  // an open wait means Claude is listening; a picked-up event not yet
+  // followed by an ack means Claude is applying feedback; otherwise away.
+  function presenceState(presence, activity) {
+    if (!presence) return null;
+    if (presence.waits > 0) return { state: "listening" };
+    var pick = null, ack = null;
+    (activity || []).forEach(function (ev) {
+      if (ev.kind === "picked-up") pick = ev.at;
+      if (ev.kind === "acked") ack = ev.at;
+    });
+    if (pick && (!ack || ack < pick)) return { state: "applying" };
+    return { state: "away", lastSeen: presence.lastClosedAt || null };
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
     module.exports = {
       apiBase: apiBase, tabHref: tabHref,
       normalizeState: normalizeState, groupComments: groupComments,
       feedIcon: feedIcon, sendCount: sendCount, seenChip: seenChip,
       tabIcon: tabIcon, pageKind: pageKind, answeredValue: answeredValue,
-      budgetFor: budgetFor, wordCount: wordCount,
+      budgetFor: budgetFor, wordCount: wordCount, presenceState: presenceState,
     };
     return; // node test harness: expose the pure core, skip the DOM widget
   }
