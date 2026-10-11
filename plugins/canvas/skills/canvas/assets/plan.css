@@ -13,20 +13,20 @@
   --ink: #1b1d21;          /* body text, headings */
   --muted: #5b6069;        /* metadata, captions, secondary */
   /* structure */
-  --line: #e3e1da;         /* hairlines, table rules, dividers */
-  --line-strong: #c4c1b7;  /* input borders, emphasized rules */
+  --line: #e7e8ea;         /* hairlines, table rules, dividers */
+  --line-strong: #c9ccd1;  /* input borders, emphasized rules */
   /* surfaces */
-  --bg: #f4f2ec;           /* page — warm-neutral bone */
-  --bg-soft: #ebe8e0;      /* raised panels, code gutter, chrome */
-  /* accent — cool technical blue, the instrument colour */
-  --accent: #2f6ba8;
-  /* callout families (label + tint pairs) */
-  --decision: #2c7a56;   --decision-bg: #e7efe9;
-  --risk: #a84730;       --risk-bg: #f3e6e1;
-  --note: #5a56a0;       --note-bg: #eae9f2;
+  --bg: #ffffff;           /* page — pure white */
+  --bg-soft: #f1f2f4;      /* raised panels, code gutter, chrome */
+  /* accent — monochrome: near-black is the instrument colour */
+  --accent: #1b1d21;
+  /* callout families (label + tint pairs) — B&W: depth of grey, not hue */
+  --decision: #1b1d21;   --decision-bg: #f1f1f2;
+  --risk: #1b1d21;       --risk-bg: #e4e4e7;
+  --note: #6b6f75;       --note-bg: #f5f5f6;
   /* review state */
-  --open: #b26f10;         /* open-comment amber */
-  --resolved: #8b8e93;     /* quieted resolved grey */
+  --open: #1b1d21;         /* open comment — full ink */
+  --resolved: #a6a9ad;     /* quieted resolved grey */
   /* type */
   --mono: "SF Mono", ui-monospace, "Menlo", "Monaco", "Consolas", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -52,12 +52,12 @@
     --line-strong: #454a51;
     --bg: #16181c;
     --bg-soft: #1e2126;
-    --accent: #5ea1de;
-    --decision: #5cbd8a;   --decision-bg: #16241d;
-    --risk: #e0906f;       --risk-bg: #2a1b16;
-    --note: #a89fe2;       --note-bg: #1e1c2a;
-    --open: #dda43f;
-    --resolved: #6a6e75;
+    --accent: #e7e6e0;
+    --decision: #e7e6e0;   --decision-bg: #24262b;
+    --risk: #e7e6e0;       --risk-bg: #2e3036;
+    --note: #9ba0a6;       --note-bg: #202227;
+    --open: #e7e6e0;
+    --resolved: #62666c;
     --code-bg: #101216;
     --code-ink: #d7d9df;
   }
@@ -69,12 +69,12 @@
   --line-strong: #454a51;
   --bg: #16181c;
   --bg-soft: #1e2126;
-  --accent: #5ea1de;
-  --decision: #5cbd8a;   --decision-bg: #16241d;
-  --risk: #e0906f;       --risk-bg: #2a1b16;
-  --note: #a89fe2;       --note-bg: #1e1c2a;
-  --open: #dda43f;
-  --resolved: #6a6e75;
+  --accent: #e7e6e0;
+  --decision: #e7e6e0;   --decision-bg: #24262b;
+  --risk: #e7e6e0;       --risk-bg: #2e3036;
+  --note: #9ba0a6;       --note-bg: #202227;
+  --open: #e7e6e0;
+  --resolved: #62666c;
   --code-bg: #101216;
   --code-ink: #d7d9df;
 }
