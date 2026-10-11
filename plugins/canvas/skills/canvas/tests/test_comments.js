@@ -11,7 +11,7 @@ const assert = require("assert");
 const {
   apiBase, tabHref,
   normalizeState, groupComments, feedIcon, sendCount, seenChip,
-  tabIcon, pageKind,
+  tabIcon, pageKind, answeredValue,
 } = require("../assets/comments.js");
 
 let passed = 0, failed = 0;
@@ -198,6 +198,14 @@ test("tabIcon knows the v2 kinds", () => {
 test("pageKind fallback unchanged for legacy servers", () => {
   assert.strictEqual(pageKind({ file: "plan.html" }), "plan");
   assert.strictEqual(pageKind({ file: "x.html" }), "doc");
+});
+
+test("answeredValue renders scalars, multi, other, defer", () => {
+  assert.strictEqual(answeredValue({ value: "json" }), "json");
+  assert.strictEqual(answeredValue({ value: ["a", "b"] }), "a, b");
+  assert.strictEqual(answeredValue({ value: "__other__", otherText: "hmm" }), "hmm");
+  assert.strictEqual(answeredValue({ value: "__defer__" }), "you decide");
+  assert.strictEqual(answeredValue(null), "");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

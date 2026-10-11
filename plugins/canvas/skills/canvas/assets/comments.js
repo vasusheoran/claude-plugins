@@ -94,12 +94,22 @@
     return pg.file === DEFAULT_PAGE ? "plan" : "doc";
   }
 
+  // An answer's display string: otherText when value is __other__, joined
+  // array for multi, "you decide" for defer, else the raw value.
+  function answeredValue(a) {
+    if (!a || a.value == null) return "";
+    if (a.value === "__defer__" ||
+        (Array.isArray(a.value) && a.value[0] === "__defer__")) return "you decide";
+    if (a.value === "__other__") return a.otherText || "";
+    return Array.isArray(a.value) ? a.value.join(", ") : String(a.value);
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
     module.exports = {
       apiBase: apiBase, tabHref: tabHref,
       normalizeState: normalizeState, groupComments: groupComments,
       feedIcon: feedIcon, sendCount: sendCount, seenChip: seenChip,
-      tabIcon: tabIcon, pageKind: pageKind,
+      tabIcon: tabIcon, pageKind: pageKind, answeredValue: answeredValue,
     };
     return; // node test harness: expose the pure core, skip the DOM widget
   }
@@ -142,6 +152,19 @@
     try { return JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) { return null; }
   }
   function lsSave() { localStorage.setItem(LS, JSON.stringify(state)); }
+
+  // The single integration contract for deck.js/board.js/nav: fired after
+  // initial load, after every local answer/comment mutation, and after
+  // every poll that changed anything.
+  function emitState() {
+    try {
+      document.dispatchEvent(new CustomEvent("canvas:state", { detail: {
+        comments: state.comments, answers: state.answers,
+        activity: state.activity, pages: state.pages,
+        approval: state.approval, version: version,
+      }}));
+    } catch (e) { /* CustomEvent unavailable — nothing downstream */ }
+  }
 
   function jget(url) { return fetch(url).then(function (r) { return r.json(); }); }
   function jpost(url, body) {
@@ -186,7 +209,7 @@
       author: "human", quote: null, page: DEFAULT_PAGE,
       createdAt: new Date().toISOString(),
     }, fields);
-    state.comments.push(c); lsSave(); return Promise.resolve(c);
+    state.comments.push(c); lsSave(); emitState(); return Promise.resolve(c);
   }
 
   // Pending drafts are editable / deletable until Send.
@@ -204,7 +227,7 @@
     state.comments = state.comments.filter(function (c) {
       return c.id !== id && c.parentId !== id;
     });
-    lsSave(); return Promise.resolve();
+    lsSave(); emitState(); return Promise.resolve();
   }
   function mergeComment(c) {
     if (!c || !c.id) return;
@@ -214,6 +237,7 @@
       return x;
     });
     if (!found) state.comments.push(c);
+    emitState();
   }
 
   // Send: pending → sent, record the gate decision, notify Claude once.
@@ -233,7 +257,7 @@
   function setStatus(id, action) {
     if (hasServer) return jpost(api("comments/" + id + "/" + action));
     var c = byId(id); if (c) c.state = action === "resolve" ? "resolved" : "sent";
-    lsSave(); return Promise.resolve();
+    lsSave(); emitState(); return Promise.resolve();
   }
 
   function upsertAnswer(fields) {
@@ -246,6 +270,7 @@
   function mergeAnswer(a) {
     state.answers = state.answers.filter(function (x) { return x.questionId !== a.questionId; });
     state.answers.push(a);
+    emitState();
   }
 
   /* ----------------------------- helpers ----------------------------- */
@@ -1246,6 +1271,7 @@
     renderTargets();
     onActivityChanged();
     if (document.getElementById("cmt-feed")) renderFeed(true);   // keep it in sync
+    emitState();
   }
   function refreshAll() { return loadAll().then(renderAll); }
 
