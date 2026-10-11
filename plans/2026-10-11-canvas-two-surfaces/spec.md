@@ -1,8 +1,9 @@
 # Canvas v2 — two surfaces (Deck + Board) — implementation spec
 
-Status: design APPROVED 2026-10-11 (canvas in this dir; answers in
-`answers.json`). Spec awaiting Vasu's review — do not implement until this
-file is approved.
+Status: IMPLEMENTED 2026-10-11 on branch `feat/canvas-v2` (all 12 plan tasks;
+ADR `decisions/2026-10-11-two-surfaces-deck-board.md`). Design APPROVED
+2026-10-11 across two review rounds (canvas in this dir; answers in
+`answers.json`).
 The skill lives at `plugins/canvas/skills/canvas/` in this repo (symlinked as
 `~/.claude/skills/canvas`). Asset changes are served live; `server/canvasd.py`
 changes need `launchctl kickstart -k gui/$UID/com.claude.canvasd`.

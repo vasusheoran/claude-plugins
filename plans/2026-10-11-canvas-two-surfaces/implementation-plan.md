@@ -1,5 +1,7 @@
 # Canvas v2 — Two Surfaces Implementation Plan
 
+> **Status: IMPLEMENTED 2026-10-11** on branch `feat/canvas-v2` via /foreman (Waves 1–4 + docs). All suites green; Deck and Board verified in-browser. Awaiting review before merge to main.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rebuild the canvas skill around three surfaces — Deck (answering), Board (looking), doc (reading) — with mobile-first bottom-bar chrome, presence, changed-dots, and pin comments.
