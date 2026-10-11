@@ -646,7 +646,22 @@ def make_handler(registry, assets_dir, tools):
     return Handler
 
 
-def build_server(port=DEFAULT_PORT, host="127.0.0.1",
+def _lan_ip():
+    """Best-effort primary LAN IP (the source address of the default route).
+    No packet is actually sent — connect() on a UDP socket just picks the
+    interface. Falls back to localhost if there's no route."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def build_server(port=DEFAULT_PORT, host="127.0.0.1", advertise=None,
                  registry_path=None, assets_dir=None):
     registry = Registry(registry_path or DEFAULT_REGISTRY)
     assets = Path(assets_dir) if assets_dir else _ASSETS_DIR
@@ -654,9 +669,13 @@ def build_server(port=DEFAULT_PORT, host="127.0.0.1",
     httpd = ThreadingHTTPServer((host, port),
                                 make_handler(registry, assets, tools))
     bound = httpd.server_address[1]
+    # When bound to all interfaces, "0.0.0.0" is not a usable URL — advertise the
+    # LAN IP so canvas_open hands back a link other devices can actually open.
+    pub = advertise or (_lan_ip() if host == "0.0.0.0" else host)
     tools.update(make_tools(registry, assets,
-                            lambda: f"http://{host}:{bound}"))
+                            lambda: f"http://{pub}:{bound}"))
     httpd.registry = registry
+    httpd.advertise_host = pub
     return httpd
 
 
@@ -667,7 +686,7 @@ def build_server(port=DEFAULT_PORT, host="127.0.0.1",
 LAUNCHD_LABEL = "com.claude.canvasd"
 
 
-def launchd_plist(port=DEFAULT_PORT):
+def launchd_plist(port=DEFAULT_PORT, host="127.0.0.1"):
     import sys
     log = Path.home() / ".claude" / "canvas" / "canvasd.log"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -682,6 +701,8 @@ def launchd_plist(port=DEFAULT_PORT):
     <string>{Path(__file__).resolve()}</string>
     <string>--port</string>
     <string>{port}</string>
+    <string>--host</string>
+    <string>{host}</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -692,19 +713,22 @@ def launchd_plist(port=DEFAULT_PORT):
 """
 
 
-def install(port=DEFAULT_PORT):
+def install(port=DEFAULT_PORT, host="127.0.0.1"):
     import os
     import subprocess
     (Path.home() / ".claude" / "canvas").mkdir(parents=True, exist_ok=True)
     plist = Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHD_LABEL}.plist"
     plist.parent.mkdir(parents=True, exist_ok=True)
-    plist.write_text(launchd_plist(port))
+    plist.write_text(launchd_plist(port, host))
     domain = f"gui/{os.getuid()}"
     subprocess.run(["launchctl", "bootout", domain, str(plist)],
                    capture_output=True)  # replace an older agent, if any
     subprocess.run(["launchctl", "bootstrap", domain, str(plist)], check=True)
     print(f"launchd agent installed: {plist}")
-    print(f"daemon: http://127.0.0.1:{port}/  (mcp at /mcp)")
+    if host == "0.0.0.0":
+        print(f"daemon: http://{_lan_ip()}:{port}/  (LAN-reachable; no auth)")
+    else:
+        print(f"daemon: http://127.0.0.1:{port}/  (mcp at /mcp)")
     print("register once:  claude mcp add --transport http --scope user "
           f"canvas http://127.0.0.1:{port}/mcp")
     print(f"after code changes:  launchctl kickstart -k {domain}/{LAUNCHD_LABEL}")
@@ -717,11 +741,15 @@ def main():
                     help="run the daemon (default) or install the launchd "
                          "agent that keeps it alive")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="bind address; 0.0.0.0 exposes the canvas on the LAN "
+                         "(no auth — trusted networks only)")
     args = ap.parse_args()
     if args.command == "install":
-        return install(port=args.port)
-    httpd = build_server(port=args.port)
-    print(f"canvasd on http://127.0.0.1:{httpd.server_address[1]}/ (mcp at /mcp)")
+        return install(port=args.port, host=args.host)
+    httpd = build_server(port=args.port, host=args.host)
+    print(f"canvasd on http://{httpd.advertise_host}:"
+          f"{httpd.server_address[1]}/ (mcp at /mcp)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
