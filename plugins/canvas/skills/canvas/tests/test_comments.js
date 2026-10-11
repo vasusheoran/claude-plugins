@@ -12,6 +12,7 @@ const {
   apiBase, tabHref,
   normalizeState, groupComments, feedIcon, sendCount, seenChip,
   tabIcon, pageKind, answeredValue, budgetFor, wordCount, presenceState,
+  changedPages,
 } = require("../assets/comments.js");
 
 let passed = 0, failed = 0;
@@ -242,6 +243,27 @@ test("presenceState: otherwise away with lastSeen", () => {
     presenceState({ waits: 0, lastClosedAt: "2026-10-11T10:05:00" },
                   [{ kind: "acked", at: "2026-10-11T10:00:00" }]),
     { state: "away", lastSeen: "2026-10-11T10:05:00" });
+});
+
+// changedPages: which pages have page-updated events newer than the last
+// visit. No visit store (private mode) → everything changed.
+test("changedPages flags pages updated after last visit", () => {
+  const activity = [
+    { kind: "page-updated", at: "2026-10-11T10:00:00",
+      refs: { pages: ["a.html", "b.html"] } },
+    { kind: "acked", at: "2026-10-11T11:00:00" },
+  ];
+  assert.deepStrictEqual(
+    changedPages(activity, { "a.html": "2026-10-11T10:30:00" }),
+    { "b.html": true });
+});
+test("changedPages with no visit store flags everything (review focus #4)", () => {
+  const activity = [{ kind: "page-updated", at: "t",
+                      refs: { pages: ["a.html"] } }];
+  assert.deepStrictEqual(changedPages(activity, null), { "a.html": true });
+});
+test("changedPages ignores malformed events", () => {
+  assert.deepStrictEqual(changedPages([{ kind: "page-updated" }, null], {}), {});
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

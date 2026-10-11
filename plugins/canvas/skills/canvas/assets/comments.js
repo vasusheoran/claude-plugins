@@ -133,6 +133,21 @@
     return { state: "away", lastSeen: presence.lastClosedAt || null };
   }
 
+  // Which pages have page-updated events newer than the viewer's last visit —
+  // drives the change-dots in the nav/Pages sheet. visits is the localStorage
+  // visited map ({ [file]: isoTime }); null (private mode / never stored) means
+  // we can't tell, so treat every updated page as changed.
+  function changedPages(activity, visits) {
+    var out = {};
+    (activity || []).forEach(function (ev) {
+      if (!ev || ev.kind !== "page-updated" || !ev.refs || !ev.refs.pages) return;
+      ev.refs.pages.forEach(function (p) {
+        if (!visits || !visits[p] || visits[p] < ev.at) out[p] = true;
+      });
+    });
+    return out;
+  }
+
   if (typeof window === "undefined" && typeof module !== "undefined") {
     module.exports = {
       apiBase: apiBase, tabHref: tabHref,
@@ -140,6 +155,7 @@
       feedIcon: feedIcon, sendCount: sendCount, seenChip: seenChip,
       tabIcon: tabIcon, pageKind: pageKind, answeredValue: answeredValue,
       budgetFor: budgetFor, wordCount: wordCount, presenceState: presenceState,
+      changedPages: changedPages,
     };
     return; // node test harness: expose the pure core, skip the DOM widget
   }
@@ -523,6 +539,20 @@
       setPickMode(!pickMode);
     }
   });
+
+  // Touch long-press (600ms) enters pick mode — the touch analog of "C" /
+  // the Comment button. Any move/up/cancel before the timer aborts it; the
+  // existing pointer-up resolver exits pick mode after the one pick.
+  var _lpTimer = null;
+  function cancelLongPress() { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }
+  document.addEventListener("pointerdown", function (e) {
+    if (e.pointerType !== "touch" || pickMode || isOwnUi(e.target)) return;
+    cancelLongPress();
+    _lpTimer = setTimeout(function () { _lpTimer = null; setPickMode(true); }, 600);
+  }, true);
+  document.addEventListener("pointerup", cancelLongPress, true);
+  document.addEventListener("pointermove", cancelLongPress, true);
+  document.addEventListener("pointercancel", cancelLongPress, true);
 
   // A querySelector-able path for an arbitrary element, scoped to its nearest
   // block. Prefers a stable id / data-cmt-id so anchors survive plan edits.
@@ -1080,47 +1110,77 @@
     }).length;
   }
 
+  // Visited-page tracking for the change-dots. All localStorage access is
+  // try/catch-wrapped: Safari private mode throws on every call, so it must
+  // degrade to "no dots" rather than break the nav. A null store means we
+  // can't tell what's been seen → changedPages treats everything as changed.
+  function visitedStore() {
+    try {
+      return JSON.parse(localStorage.getItem(
+        "cmt-visited::" + apiBase(location.pathname)) || "{}");
+    } catch (e) { return null; }
+  }
+  function markVisited() {
+    try {
+      var v = visitedStore() || {};
+      v[curPage] = new Date().toISOString();
+      localStorage.setItem("cmt-visited::" + apiBase(location.pathname),
+                           JSON.stringify(v));
+    } catch (e) { /* private mode — dots degrade, nothing breaks */ }
+  }
+
+  function presenceChipHtml() {
+    var p = presenceState(version.presence, state.activity);
+    if (!p) return "";
+    if (p.state === "listening")
+      return '<span class="cmt-presence"><span class="dot pulse"></span>listening</span>';
+    if (p.state === "applying")
+      return '<span class="cmt-presence"><span class="dot"></span>applying ✍</span>';
+    var seen = p.lastSeen ? " · " + p.lastSeen.slice(11, 16) : "";
+    return '<span class="cmt-presence away"><span class="dot off"></span>away' +
+           escapeHtml(seen) + "</span>";
+  }
+
+  // Two bars at every width: a fixed top bar (#cmt-top) with the page title and
+  // a "Pages ▾" chip (change-dot when any OTHER page has open comments or has
+  // changed since last visit), and a bottom action bar (#cmt-nav.cmt-bottom)
+  // with Comment / Comments count / bell / presence chip / Send.
   function renderNav() {
+    var changed = changedPages(state.activity, visitedStore());
+    var others = (state.pages || []).filter(function (p) { return p.file !== curPage; });
+    var anyBadge = others.some(function (p) {
+      return changed[p.file] || sentOpenOnPage(p.file) > 0; });
+
+    var top = document.getElementById("cmt-top") || document.createElement("div");
+    top.id = "cmt-top"; top.className = "cmt-top";
+    var cur = (state.pages || []).filter(function (p) { return p.file === curPage; })[0];
+    top.innerHTML =
+      '<span class="cmt-top-title">' +
+        escapeHtml((cur && cur.title) || document.title || curPage) + "</span>" +
+      '<button class="cmt-pages-chip" id="cmt-pages">Pages ▾' +
+        (anyBadge ? '<span class="chg"></span>' : "") + "</button>";
+    if (!top.parentNode) document.body.appendChild(top);
+    top.querySelector("#cmt-pages").onclick = function () { openPagesSheet(changed); };
+
     var nav = document.getElementById("cmt-nav") || document.createElement("div");
-    nav.id = "cmt-nav"; nav.className = "cmt-nav";
-    var appr = state.approval || {};
-    var s = appr.state;
-    var gated = !approvalOff();
+    nav.id = "cmt-nav"; nav.className = "cmt-nav cmt-bottom";
     var n = sendCount(state.comments);
-
-    // Approval-state badge stays on gated pages (approved / changes requested).
-    var apprBadge = gated
-      ? (s
-          ? '<span class="appr-state ' + s + '">' +
-            (s === "approved" ? "✓ Approved" : "✎ Changes requested") + "</span>"
-          : '<span class="appr-state none">Not submitted</span>')
-      : "";
-    var latest = latestFeedText();
-    var latestHtml = latest
-      ? '<span class="cmt-feed-latest" title="' + escapeHtml(latest) + '">' +
-        escapeHtml(latest) + "</span>"
-      : "";
-    // Send disabled only when there is nothing to send AND no gate to exercise;
-    // on gated pages "approve with zero comments" is legitimate, so keep it live.
-    var sendDisabled = (!gated && n === 0) ? " disabled" : "";
-    var sendBtn = '<button class="cmt-btn primary cmt-send" id="cmt-send"' + sendDisabled +
-      '>Send to Claude' + (n ? " (" + n + ")" : "") + "</button>";
-
     nav.innerHTML =
-      tabsHtml() +
       '<button class="cmt-nav-btn cmt-mode' + (pickMode ? " active" : "") +
-        (nudgeUnused() ? " nudge" : "") + '" id="cmt-mark" ' +
-        'title="Comment mode — click an element (C to toggle, Esc to exit). ' +
-        'Text quoting needs no mode: just select.">💬 Comment</button>' +
-      '<button class="cmt-nav-btn" id="cmt-comments">Comments ' +
-        '<span class="count">' + openCount() + "</span></button>" +
-      '<span class="cmt-nav-spacer"></span>' +
-      latestHtml +
-      '<button class="cmt-nav-btn cmt-bell" id="cmt-bell" title="Activity">🔔' +
+        '" id="cmt-mark" title="Comment — C, or long-press on touch">💬</button>' +
+      '<button class="cmt-nav-btn" id="cmt-comments">🗨 <span class="count">' +
+        openCount() + "</span></button>" +
+      '<button class="cmt-nav-btn cmt-bell" id="cmt-bell">🔔' +
         '<span class="cmt-bell-dot"></span></button>' +
-      apprBadge + sendBtn;
+      presenceChipHtml() +
+      '<button class="cmt-btn primary cmt-send" id="cmt-send"' +
+        ((approvalOff() && n === 0) ? " disabled" : "") + ">Send" +
+        (n ? " (" + n + ")" : "") + " ↑</button>";
     if (!nav.parentNode) document.body.appendChild(nav);
 
+    // Handler bindings carried over verbatim from the old renderNav:
+    // bell → toggleFeed, #cmt-mark → setPickMode(!pickMode),
+    // #cmt-comments → toggle #cmt-panel, #cmt-send → openSendPopover.
     var bell = nav.querySelector("#cmt-bell");
     bell.classList.toggle("has-unread", unreadCount() > 0);
     bell.onclick = function (e) { e.stopPropagation(); toggleFeed(); };
@@ -1132,18 +1192,64 @@
     if (sendEl) sendEl.onclick = function (e) { e.stopPropagation(); openSendPopover(); };
   }
 
+  /* ------------------------------- sheets ---------------------------- */
+
+  // One bottom-sheet container (.cmt-sheet) + scrim, reused by the Pages list
+  // and the send UI. The scrim handles outside-tap dismissal.
+  function closeSheet() {
+    var s = document.getElementById("cmt-sheet"); if (s) s.remove();
+    var sc = document.getElementById("cmt-scrim"); if (sc) sc.remove();
+  }
+  function openSheet(innerHtml) {
+    closeSheet();
+    var scrim = document.createElement("div");
+    scrim.id = "cmt-scrim"; scrim.className = "cmt-scrim";
+    scrim.onclick = closeSheet;
+    document.body.appendChild(scrim);
+    var sheet = document.createElement("div");
+    sheet.id = "cmt-sheet"; sheet.className = "cmt-sheet";
+    sheet.innerHTML = innerHtml;
+    document.body.appendChild(sheet);
+    return sheet;
+  }
+
+  // Pages sheet: every page with its kind icon, title, change-dot and
+  // open-comment badge; rows are links that stay inside the workspace prefix.
+  function openPagesSheet(changed) {
+    changed = changed || {};
+    var pages = state.pages || [];
+    if (!pages.length) pages = [{ file: curPage, title: document.title || curPage }];
+    var rows = pages.map(function (pg) {
+      var current = pg.file === curPage;
+      var badge = sentOpenOnPage(pg.file);
+      return '<a class="cmt-pagerow' + (current ? " current" : "") + '" href="' +
+        escapeHtml(tabHref(location.pathname, pg.file)) + '"' +
+        (current ? ' aria-current="page"' : "") + ">" +
+        '<span class="cmt-pagerow-icon">' + tabIcon(pageKind(pg)) + "</span>" +
+        '<span class="cmt-pagerow-title">' + escapeHtml(pg.title || pg.file) + "</span>" +
+        (changed[pg.file] ? '<span class="cmt-pagerow-chg"></span>' : "") +
+        (badge ? '<span class="cmt-pagerow-badge">' + badge + "</span>" : "") +
+        "</a>";
+    }).join("");
+    openSheet('<div class="cmt-sheet-head">Pages</div>' + rows);
+  }
+
   /* --------------------------- send popover -------------------------- */
 
-  function closeSendPopover() {
-    var p = document.getElementById("cmt-sendpop"); if (p) p.remove();
-  }
+  function closeSendPopover() { closeSheet(); }
+  // Send UI, now a bottom sheet. On gated pages the approval state becomes the
+  // sheet's header line and the approve / request-changes radios stay.
   function openSendPopover() {
-    closeSendPopover();
     var n = sendCount(state.comments);
     var gated = !approvalOff();
     var ans = answeredCount();
     var summary = n + " comment" + (n === 1 ? "" : "s") +
       (ans ? " · " + ans + " question" + (ans === 1 ? "" : "s") + " answered" : "");
+    var appr = state.approval || {};
+    var head = "Send to Claude" +
+      (gated && appr.state
+        ? " · " + (appr.state === "approved" ? "✓ Approved" : "✎ Changes requested")
+        : "");
     var radios = gated
       ? '<div class="cmt-sendpop-decision">' +
         '<label><input type="radio" name="cmt-dec" value="changes-requested"' +
@@ -1151,30 +1257,26 @@
         '<label><input type="radio" name="cmt-dec" value="approved"' +
           (n === 0 ? " checked" : "") + "> ✓ Approve</label></div>"
       : "";
-    var pop = document.createElement("div");
-    pop.id = "cmt-sendpop"; pop.className = "cmt-sendpop";
-    pop.innerHTML =
+    var sheet = openSheet(
+      '<div class="cmt-sheet-head">' + escapeHtml(head) + "</div>" +
       '<div class="cmt-sendpop-sum">' + escapeHtml(summary) + "</div>" + radios +
       '<div class="cmt-sendpop-actions">' +
       '<button class="cmt-btn cmt-send-cancel">Cancel</button>' +
-      '<button class="cmt-btn primary cmt-send-go">Send</button></div>';
-    document.body.appendChild(pop);
-    var btn = document.getElementById("cmt-send");
-    if (btn) {
-      var r = btn.getBoundingClientRect();
-      pop.style.top = (r.bottom + 6) + "px";
-      pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
-    }
-    pop.querySelector(".cmt-send-cancel").onclick = closeSendPopover;
-    pop.querySelector(".cmt-send-go").onclick = function () {
+      '<button class="cmt-btn primary cmt-send-go">Send</button></div>');
+    sheet.querySelector(".cmt-send-cancel").onclick = closeSheet;
+    sheet.querySelector(".cmt-send-go").onclick = function () {
       var decision = null;
       if (gated) {
-        var checked = pop.querySelector('input[name="cmt-dec"]:checked');
+        var checked = sheet.querySelector('input[name="cmt-dec"]:checked');
         decision = checked ? checked.value : (n > 0 ? "changes-requested" : "approved");
       }
-      submit(decision, null).then(function () { closeSendPopover(); refreshAll(); });
+      submit(decision, null).then(function () { closeSheet(); refreshAll(); });
     };
   }
+
+  // Task 9's deck finish prompt opens the send sheet through this.
+  window.CanvasReview = window.CanvasReview || {};
+  window.CanvasReview.openSend = openSendPopover;
 
   /* ------------------------ activity feed & toasts ------------------- */
 
@@ -1359,6 +1461,7 @@
     highlightChangedBlocks();          // hash authored HTML before we decorate it
     numberAnnotated();
     loadAll().then(function () {
+      markVisited();                   // stamp this page so other pages' dots mean "new since"
       renderAll();
       renderMeter();
       if (hasServer) setInterval(poll, 2500);
