@@ -1,28 +1,33 @@
 <!DOCTYPE html>
 <!--
-  canvas plan-mode scaffold. Copy to canvas/<slug>/plan.html and replace the
+  canvas deck scaffold. Copy to canvas/<slug>/plan.html and replace the
   content. This is the gated decisions page — keep it to ONE 1080p screen when
-  possible (never more than ~2): summary, question blocks, ask block, done.
-  Everything that justifies the plan — architecture, diagrams, file trees,
+  possible (never more than ~2): verdict strip, decision cards with
+  data-lean, settled rows, ask block, done.
+  Everything that justifies the deck — architecture, diagrams, file trees,
   annotated code, config/rule sketches, risks, rollout — goes in details.html
   (copy assets/canvas.html, kind "doc", ungated), linked from the banner below.
-  Full recipe: references/document-quality.md, "Plan-mode structure".
+  Full recipe: references/document-quality.md, "Deck anatomy".
   Rules:
    - Every reviewable section is <section class="block" data-block-id="..."
      data-block-label="">  so it can be commented on.
    - data-block-id must be unique and stable (don't renumber on edits) — comments
      anchor to it.
+   - Decision cards are section.block.question[data-question-id] with
+     .qopt[data-value] options; mark Claude's pick with the bare data-lean
+     attribute on exactly one option per single-choice question — never in
+     option prose.
    - Prefer the shared vocabulary (plan.css classes, the building blocks in
-     references/document-quality.md). Inline CSS/JS is allowed when the plan
+     references/document-quality.md). Inline CSS/JS is allowed when the deck
      genuinely needs it — two invariants: keep comments.js loaded (below) and
      don't remove/renumber anchored elements (data-block-id / data-cmt-id).
    - plan.css / comments.js / diagram.js are served by the canvasd daemon
      (shared assets — no copies in the workspace).
-   - data-canvas-kind="plan" on the body declares this artifact's kind for the
-     tab strip; leave it as plan for this template. The approval gate renders
+   - data-canvas-kind="deck" on the body declares this artifact's kind for the
+     tab strip; leave it as deck for this template. The approval gate renders
      here and only here — details.html keeps data-approval="off".
-   - For non-plan artifacts (mockup / decide / diagram / doc) start from
-     canvas.html instead — same folder, its own tab, no gate.
+   - For a Board, copy assets/board.html instead (frames + pins, no gate).
+     For a plain reading doc, copy assets/canvas.html (kind "doc", no gate).
 -->
 <html lang="en">
 <head>

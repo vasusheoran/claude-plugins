@@ -2,8 +2,8 @@
 
 Every canvas artifact is a serious technical document, not marketing. Read this
 before writing any body. The first section is the **shared authoring bar** that
-applies to every mode (plan, mockup, decide, diagram, doc); the last section is
-the **plan-mode structure** that applies only to plan artifacts.
+applies to every surface (Deck, Board, doc); the last section is the
+**deck anatomy** that applies to a gated plan deck.
 
 ---
 
@@ -35,7 +35,7 @@ Building blocks:
 | Code that needs explaining | `<div class="annotated"><pre>…</pre><div class="notes"><div class="note-item"><span class="ln">L3</span> …</div></div></div>` |
 | Plain throwaway snippet | `<pre>…</pre>` or inline `<code>` |
 | Before/after | `<div class="columns">` with two children, each `.col-title` + content |
-| UI screen | `<div class="wf-frame">` — see `references/wireframe.md` |
+| UI screen | `<div class="wf-frame">` — see `references/wireframe.md`, or a Board frame |
 
 Reserve `annotated` for code that needs margin notes; use bare `<pre>` for
 throwaway snippets. Use `diagram` for two-dimensional relationships, not a
@@ -49,7 +49,7 @@ comments detach.
 
 ## Component-level comments (Comment mode)
 
-The top nav carries the whole review UI, and there are two ways to anchor a
+The nav carries the whole review UI, and there are two ways to anchor a
 comment — you author no comment affordances either way.
 
 - **Select text → quote.** Selecting three or more characters inside a block
@@ -63,14 +63,15 @@ comment — you author no comment affordances either way.
   in a row. While it's on, the cursor is an inspector-style picker; clicking
   an element anchors to it (snaps to the nearest `data-cmt-id`, else a
   generated path), outlined like a Figma/Vercel pin. This is how comments
-  land on diagrams, wireframes, and other non-text elements.
+  land on diagrams, wireframes, Board frames, and other non-text elements. On
+  a Board, Comment mode drops an x/y pin instead (`references/modes.md`).
 
 With Comment mode **off** and no text selected, the review UI touches no
-artifact events at all — which is why interactive mockups are safe to click
-through without triggering the picker. A block with open comments shows a
-small clickable **count chip** (top-right) that jumps to its thread in the
-panel; that's display/navigation, not a creation affordance. If a prototype
-needs the **C** key for its own behavior, opt out with
+artifact events at all — which is why interactive mockups and boards are safe
+to click through without triggering the picker. A block with open comments
+shows a small clickable **count chip** (top-right) that jumps to its thread in
+the panel; that's display/navigation, not a creation affordance. If a
+prototype needs the **C** key for its own behavior, opt out with
 `<body data-comment-key="off">` (the nav button still works).
 
 **Any element is pickable** — you don't have to tag anything. Tagging is only
@@ -89,7 +90,7 @@ about anchor stability. Give an element a stable `data-cmt-id` (+ optional
   (`[data-block-id="x"] > .row > .node:nth-of-type(3)`). That's convenient but
   brittle: if you edit that part of the artifact the path can drift, and the
   comment falls back to listing under its block. So **tag the things you know will
-  be discussed** (diagram nodes, wireframe controls, file rows); free-pick the
+  be discussed** (diagram nodes, wireframe controls, file rows, board frames); free-pick the
   rest.
 - `data-cmt-label` (optional) — the label shown in the panel; omit it and the
   element's trimmed text is used.
@@ -98,28 +99,27 @@ Composer: a single **Add** action drops the comment into the panel as a
 **pending** draft, with edit and delete controls — nothing reaches Claude yet.
 The reviewer repeats this for as many comments as they want, in any order,
 editing or deleting drafts freely. Pressing **Send to Claude (N)** in the nav
-opens a popover that bundles the pending comments, the question answers, and
-— on gated pages — an approve / request-changes decision, and submits all of
-it as one event. The comment then moves from pending to sent, and its status
+opens a sheet that bundles the pending comments, the question answers, and —
+on gated pages — an approve / request-changes decision, and submits all of it
+as one event. The comment then moves from pending to sent, and its status
 chip (Pending → Sent → Seen → Replied / Resolved) tracks what Claude has done
 with it. You author none of this UI.
 
 ## Interactive question blocks
 
 Author each genuinely-open decision as an **interactive question block** so the
-user answers in the page; answers land in `answers.json` for you to read. In a
-**decide** artifact these are the primary surface; in a **plan** they sit near
-the top of the gated page, right after the summary (see Plan-mode structure).
-Don't scatter questions through a document.
+user answers in the page; answers land in `answers.json` for you to read.
+Question blocks are the Deck's primary surface — don't scatter them through a
+document.
 
 ```html
 <section class="block question" data-block-id="q-store"
          data-block-label="Where should state live?"
          data-question-id="store" data-question-mode="single">
   <h3>Where should state live?</h3>
-  <p>Flat JSON is simplest and matches what the rest of the code already does;
-     SQLite only earns its keep once we need queries.</p>
-  <div class="qopt" data-value="json">Flat JSON</div>
+  <p>Flat JSON matches what the rest of the code already does; SQLite earns
+     its keep once queries are needed.</p>
+  <div class="qopt" data-value="json" data-lean>Flat JSON</div>
   <div class="qopt" data-value="sqlite">SQLite</div>
 </section>
 ```
@@ -138,10 +138,31 @@ Clicking a selected option again unselects it (`value: null` = open again).
 - `data-question-mode`: `single` (radio), `multi` (checkbox), or `freeform`
   (a textarea is rendered automatically — omit `.qopt` children).
 - `data-question-id` must be unique and stable — answers key off it.
-- **Options render neutral.** Don't write "(recommended)" or any other lean
-  into option text — the You-decide row never reveals which way Claude would
-  go, and an option that editorializes undermines that. Put the argument for
-  a default in the prose above the options instead.
+- **The lean is machine-marked, not written.** Add the bare `data-lean`
+  attribute to exactly one `.qopt` on a single-choice question to mark
+  Claude's pick; the badge renders from the attribute. Never write
+  "(recommended)" or any other lean into option text — "You decide" means
+  accepting the visible `data-lean` pick, and an option that editorializes in
+  prose undermines that contract.
+
+**Visual options.** An option that benefits from a side-by-side compare — a
+layout choice, a placement choice — can carry a thumbnail and a longer
+description instead of plain text:
+
+```html
+<div class="qopt opt" data-value="settings" data-lean>
+  <div class="thumb"><!-- mini wireframe, inline SVG, or img --></div>
+  <a class="goboard" href="board.html#frame-b">⤢ Board</a>
+  <div class="meta">
+    <div class="t">Inside Settings</div>
+    <div class="d">Zero nav cost; two taps deep.</div>
+  </div>
+</div>
+```
+
+`.thumb` is optional — a hand-drawn mini-wireframe per `references/wireframe.md`
+— as is the `.goboard` deep link into a companion Board page. `.meta .t`/`.d`
+text counts toward the word budget like any other card content.
 
 ## Tone
 
@@ -152,21 +173,32 @@ Clicking a selected option again unselects it (`value: null` = open again).
 - Preserve the user's level of abstraction. If the idea is a broad framework,
   don't collapse it into the first concrete example — label examples as examples.
 
+## Budgets
+
+Deck 200 visible words, doc 600, Board exempt. `data-budget-words` on
+`<body>` overrides the default for a specific page. The count is words in
+`<main>` as rendered by default: a collapsed `<details>` counts only its
+`<summary>` text, so detail hidden behind a toggle is budget-free. The meter
+is a corner chip and never blocks saving or sending — it's a signal, not a
+gate.
+
 ## Pre-handoff check
 
 Before sharing the URL: open it yourself and confirm no overlapping/clipped
 elements, no unreadable diagrams, adequate contrast, and no misleadingly
-"active" controls in wireframes. Fix the **shared CSS** if something looks wrong
-globally — don't patch one artifact's markup.
+"active" controls in wireframes or board frames. The word meter reads green,
+or you can say why it doesn't in chat. Fix the **shared CSS** if something
+looks wrong globally — don't patch one artifact's markup.
 
 ---
 
-# Plan-mode structure
+# Deck anatomy
 
-Applies to **plan** artifacts only. A plan is **two pages**: a one-screen gated
-`plan.html` carrying the decisions, and an ungated `details.html` carrying the
-design that justifies them. The reviewer's job on `plan.html` is
-answer-and-approve; reading everything is opt-in via the Details tab.
+Applies to a **gated** Deck (plan = gated deck). It is **two pages**: a
+one-screen gated `plan.html` carrying the decisions, and an ungated
+`details.html` carrying the design that justifies them. The reviewer's job on
+`plan.html` is answer-and-approve; reading everything is opt-in via the
+Details tab.
 
 ## plan.html — the gated page (decisions)
 
@@ -177,18 +209,22 @@ crowd them out. The page is, in order:
 1. **Banner** — status, date, and a link to the details page:
    `<span>Full design: <a href="details.html">Details</a> tab</span>`.
 2. **Title** — names the ask: "X — 3 decisions, then I build".
-3. **Summary block** — 3–6 sentences: what's being built, the genuinely new
-   part, how it ends. At most one compact table.
-4. **Question blocks** — every open decision, numbered, near the top; each
-   argues the lean in its prose (options render neutral). This is the page's
-   payload — never park it at the bottom.
-5. **Ask block** — one short block: what approval unblocks — files/areas
+3. **Verdict strip** — one compact summary line or table: what's being built,
+   the genuinely new part, how it ends.
+4. **Decision cards** — every open decision, numbered, near the top, as
+   question blocks; the lean sits on the picked `.qopt` via `data-lean`, with
+   the argument for it in the card's prose. This is the page's payload — never
+   park it at the bottom.
+5. **Settled rows** — choices already made and not reopened, rendered as
+   `callout decision` rows rather than question blocks, so the reviewer sees
+   what's fixed versus what's still open.
+6. **Ask block** — one short block: what approval unblocks — files/areas
    touched, anything needed from the reviewer, how the work runs.
 
 That's the whole page. Architecture, diagrams, file trees, annotated code,
 config/rule sketches, risk registers, and rollout plans render on
-`details.html`, not here. A risk that argues a question's lean is one sentence
-in that question's prose; the register stays in details.
+`details.html`, not here. A risk that argues a decision card's lean is one
+sentence in that card's prose; the register stays in details.
 
 ## details.html — the ungated page (supporting design)
 
@@ -201,14 +237,14 @@ choices in `callout decision`) → **architecture** (one diagram per decision) �
 (end-to-end check, not just unit tests) → **risks** (`callout risk`). Comments
 left here land in the same **Send to Claude** bundle as plan.html's.
 
-A plan whose entire supporting design fits inside the one-screen budget can
+A deck whose entire supporting design fits inside the one-screen budget can
 stay a single `plan.html` — the split protects the decisions, it isn't
 ceremony.
 
-For complex plans, do a final pass: any undecided architecture, scope, UX, data
-shape, rollout, or ownership question is either decided in `details.html` (with
-rationale) or a question block on `plan.html` with the lean argued in prose —
-and `plan.html` still fits the budget.
+For complex plans, do a final pass: any undecided architecture, scope, UX,
+data shape, rollout, or ownership question is either decided in
+`details.html` (with rationale) or a decision card on `plan.html` with the
+lean marked via `data-lean` — and `plan.html` still fits the budget.
 
 The reviewer's **Approve / Request changes** decision (the approval gate) is a
 fixed bar injected automatically — you don't author it; you read its result from

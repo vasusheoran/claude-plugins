@@ -1,9 +1,10 @@
 # Wireframe / mockup quality
 
-The reference for the **mockup** mode, and for any UI screen inside a plan. Read
-before authoring one. Uses hand-authored HTML/CSS with the `wf-*` classes in
-`assets/plan.css`. Author screens for UI/product work only — skip them for
-architecture, backend, data, or copy-only artifacts.
+The reference for a UI screen on a Board, a deck option thumbnail, or any UI
+screen inside a plan. Read before authoring one. Uses hand-authored HTML/CSS
+with the `wf-*` classes in `assets/plan.css`. Author screens for UI/product
+work only — skip them for architecture, backend, data, or copy-only
+artifacts.
 
 ## Realism
 
@@ -93,3 +94,40 @@ review sharper than a static frame.
 </div>
 <div class="wf-cap">Inbox, default state</div>
 ```
+
+## Board frames
+
+A Board page (`board.html`, `references/modes.md` › Board) lays frames out
+absolutely inside `#viewport > #world` rather than stacking them in document
+flow:
+
+```html
+<div class="board-frame" data-frame-id="frame-b"
+     style="left: 280px; top: 0; width: 220px; height: 420px;">
+  <span class="board-flabel">B · settings drawer</span>
+  <div class="wf-frame app">
+    …frame content, same wf-* kit as any wireframe…
+  </div>
+</div>
+```
+
+- `data-frame-id` is unique and stable per frame — it anchors pin comments
+  and is the deep-link target (`board.html#frame-b`). Keep it stable across
+  revisions, same discipline as `data-block-id`.
+- `.board-flabel` sits above the frame (`A · variant name`) so the reviewer
+  can tell frames apart while panned out.
+- Position frames with plain `left`/`top`/`width`/`height` — the board.js
+  pan/zoom transform applies to `#world` as a whole, not to individual
+  frames.
+- Everything inside a frame follows the same realism and layout rules as any
+  wireframe above; a frame can also hold a `diagram.js` output or hand SVG
+  instead of a `wf-frame`.
+
+## Deck option thumbnails
+
+A deck question's visual option (`.qopt.opt` with a `.thumb`,
+`references/document-quality.md` › Interactive question blocks) is a
+hand-drawn mini-wireframe, not a full screen: a small inline SVG or a scaled
+fragment of the real `wf-*` markup, just enough to tell two options apart at
+a glance. Save a full-fidelity comparison for a Board frame and link to it
+with `.goboard`.

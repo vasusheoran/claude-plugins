@@ -17,19 +17,21 @@ a doc the user should comment on. Skip it for trivial, unambiguous work — typo
 one-line fixes, a single well-specified function — and just do it. Never pad an
 artifact with filler.
 
-## Modes
+## Surfaces
 
-Pick a mode from the task; ceremony scales per mode. Full per-mode rules
-(what it contains, what "done" means, the plan discipline) are in
+Pick a surface from the task; ceremony scales per surface. Full per-surface
+rules (what it contains, what "done" means, the deck discipline) are in
 `references/modes.md` — read it.
 
-| Task | Mode | Reference | Gate |
-|------|------|-----------|------|
-| Plan work before code | plan | `document-quality.md`, `wireframe.md`, `svg-diagrams.md` | **required** |
-| UI variants / prototype | mockup | `wireframe.md` | off |
-| Choose between options | decide | `document-quality.md` | optional |
-| Architecture / flow in 2-D | diagram | `svg-diagrams.md` | off |
-| Freeform reviewable doc | doc | `document-quality.md` | off |
+| Task | Surface | Reference | Gate | Budget |
+|------|---------|-----------|------|--------|
+| Decisions, plans, choices between options | Deck | `document-quality.md`, `wireframe.md`, `svg-diagrams.md` | optional (plan = gated deck) | 200w |
+| UI variants, prototype, architecture, flow | Board | `wireframe.md`, `svg-diagrams.md` | off | none |
+| Freeform reviewable doc | doc | `document-quality.md` | off | 600w |
+
+Workspaces seeded before this rewrite may still carry the old kinds
+(`plan`/`mockup`/`diagram`/`decision`) — they keep loading, commenting, and
+approving unchanged; don't convert them.
 
 ## Workspace lifecycle
 
@@ -64,6 +66,17 @@ Author each artifact from its template. Rules (full detail in
   `<section class="block" data-block-id="…" data-block-label="…">`. Ids are
   **unique and stable** — never renumber on edits; comments anchor to them. Tag
   discussable elements with a stable `data-cmt-id`.
+- **Deck.** Decisions are `section.block.question[data-question-id]` cards
+  with `.qopt[data-value]` options; mark Claude's pick with the bare
+  `data-lean` attribute on exactly one option per single-choice question —
+  never in prose. `deck.js` (loaded after `comments.js`) layers the stepper
+  and keyboard picks over the cards; it never persists anything itself.
+- **Board.** Frames are absolutely-positioned `[data-frame-id]` children of
+  `#viewport > #world` (template: `board.html`); `board.js` gives pan/zoom,
+  Fit, and deep links (`page.html#frame-id`), and renders x/y pin comments
+  from `comments.json`.
+- **Budget meter.** A corner chip shows visible words against the surface's
+  budget (deck 200 / doc 600 / Board none); it's a signal, never a block.
 - **Inline CSS/JS is allowed** — use the `<style>`/`<script>` slots for styling,
   clickable states, variant toggles, working prototypes. Two invariants: (1)
   keep `comments.js` loaded on every artifact; (2) your JS must not remove or
@@ -73,9 +86,9 @@ Author each artifact from its template. Rules (full detail in
   sequence/flow via a `diagram.js` JSON spec, freeform architecture via hand SVG,
   a linear chain via the div kit. Load `diagram.js` after `comments.js` in any
   artifact that uses a spec.
-- **Gate.** Non-plan artifacts declare `<body data-approval="off">` (already in
-  `canvas.html`). Plan pages carry the gate — leave it off, or remove
-  `data-approval="off"` if you started from `canvas.html`.
+- **Gate.** Non-gated artifacts declare `<body data-approval="off">` (already
+  in `canvas.html` and `board.html`). A gated deck carries the gate — leave it
+  off, or remove `data-approval="off"` if you started from `canvas.html`.
 
 ## The review loop
 
@@ -125,9 +138,9 @@ gitignore `comments.json`, `answers.json`, `approval.json`, `ack.json`,
 - **Approval**: `state` is `null` / `"approved"` / `"changes-requested"`, with
   an optional `note`.
 
-## The approval gate (plan mode)
+## The approval gate (gated deck)
 
-For plan artifacts the approval **is** the gate: only start writing code once
+For a gated deck the approval **is** the gate: only start writing code once
 `canvas_wait`/`canvas_feedback` reports `approval.state == "approved"`. A clean
 approval with no open `sent` comments is the cue to stop planning and
 implement; open sent comments keep you in the loop. Planning stays read-only
@@ -145,6 +158,11 @@ checked in or shared as a standalone snapshot that outlives the daemon.
   writes and bootstraps a launchd agent (KeepAlive + RunAtLoad, port 8618,
   logs at `~/.claude/canvas/canvasd.log`), then register the endpoint once:
   `claude mcp add --transport http --scope user canvas http://127.0.0.1:8618/mcp`
+- **LAN-reachable install**: `python3 <skill-dir>/server/canvasd.py install --host 0.0.0.0`
+  binds every interface instead of just loopback, so a phone or another
+  machine on the same network can open the canvas URL. There's no auth —
+  only do this on a trusted home/office LAN, never on a shared or public
+  network.
 - **If the `canvas_*` tools are missing in a session**: the daemon is down or
   unregistered. Re-run the install command, then `/mcp` to reconnect.
 - **After changing `server/canvasd.py` or the shared assets**, restart the

@@ -1,175 +1,142 @@
-# Modes
+# Surfaces
 
-A canvas holds one or more reviewable HTML artifacts. Each artifact runs in a
-**mode** that scales the ceremony to the task. Pick the mode from the task type,
-start from the named template, read the named references, and hold the artifact
-to the mode's "done" bar.
+A canvas holds one or more reviewable HTML artifacts. Each artifact runs on one
+of three **surfaces** that scale the ceremony to the task: Deck for answering,
+Board for looking, doc for reading. Pick the surface from the task type, start
+from the named template, read the named references, and hold the artifact to
+the surface's "done" bar.
 
-| Mode | Use for | Template | Read | Gate | Question blocks | Self-review |
-|------|---------|----------|------|------|-----------------|-------------|
-| **plan** | implementation plans before code | `template.html` → `plan.html` | `document-quality.md`, `wireframe.md`, `svg-diagrams.md` | **required** | encouraged | required for high-stakes |
-| **mockup** | UI variants, clickable prototypes | `canvas.html` | `wireframe.md`, `document-quality.md` (shared bar) | off | optional | recommended |
-| **decide** | choosing between options | `canvas.html` | `document-quality.md` (shared bar) | optional | **primary** | recommended |
-| **diagram** | architecture / flows in 2-D | `canvas.html` | `svg-diagrams.md`, `document-quality.md` (shared bar) | off | optional | optional |
-| **doc** | freeform reviewable notes | `canvas.html` | `document-quality.md` (shared bar) | off | optional | optional |
+| Surface | Use for | Template | Read | Gate | Primary content | Budget |
+|---------|---------|----------|------|------|------------------|--------|
+| **Deck** | decisions, plans, choices between options | `template.html` → `plan.html` | `document-quality.md`, `wireframe.md`, `svg-diagrams.md` | optional (plan = gated deck) | question blocks | 200 words |
+| **Board** | UI variants, prototypes, architecture, flow | `board.html` | `wireframe.md`, `svg-diagrams.md` | off | frames + pins | none |
+| **doc** | freeform reviewable notes | `canvas.html` | `document-quality.md` (shared bar) | off | prose + blocks | 600 words |
 
 Non-gated artifacts declare `<body data-approval="off">` (already set in
-`canvas.html`). Plan-mode pages carry the gate — leave `data-approval` off the
-body, or remove it if you started from `canvas.html`.
+`canvas.html` and `board.html`). A deck carries the gate when it needs explicit
+sign-off before code; drop `data-approval="off"` for a gated deck, or remove it
+if you started from `canvas.html`.
 
 ---
 
-## plan
+## Deck — answering
 
-**When.** The plan is better as a reviewable artifact than a chat paragraph:
-multi-file, ambiguous, risky, architecture-heavy, data-heavy, or UI-heavy work,
-or any modest change where the user should **see, comment on, and approve a
-direction before code**. Skip trivial, unambiguous work — typos, one-line fixes,
-a single well-specified function — and just make the change. Never pad a plan
-with filler; never ship a single-step plan.
+**When.** The reviewer's job is to decide something: an implementation plan
+before code, a choice between options, any open question better answered in
+the page than argued in chat. Skip it for trivial, unambiguous work — typos,
+one-line fixes, a single well-specified function — and just make the change.
 
-**Contains.** Two pages by default (full recipe: Plan-mode structure in
-`document-quality.md`). `plan.html` — gated, one 1080p screen when possible,
-never more than ~2: a 3–6 sentence summary (at most one compact table), then
-every open decision as a numbered question block near the top, then a short
-block naming what approval unblocks. `details.html` — ungated `doc` kind,
-copied from `canvas.html`, linked from plan.html's banner: everything that
-justifies the plan (outcome & scope, approach, architecture, key changes,
-rollout & verification, risks). Diagrams via the div kit or hand-authored SVG
-and wireframes for UI plans go in `details.html`. plan.html's body carries
-`data-canvas-kind="plan"` (already set in `template.html`); the gate stays on
-plan.html only. A plan whose supporting design fits the one-screen budget can
-stay a single page.
+**Contains.** One or more `section.block.question` cards — the markup contract
+is unchanged from before (`data-question-id`, `data-question-mode`,
+`.qopt[data-value]`; answers land in `answers.json`; synthetic Other/You-decide
+rows still work). Question blocks are the deck's primary surface, not an
+add-on: don't scatter them through a document. Options that need a visual
+compare use the `.qopt` thumb/meta markup (`references/document-quality.md`);
+exactly one option per single-choice question can carry `data-lean` to mark
+Claude's pick — the badge renders from the attribute, never from prose.
 
-**Start from** `template.html`, copied to `plan.html`; copy `canvas.html` to
-`details.html` for the supporting design. **Read** `document-quality.md` before
-the body, `wireframe.md` before any UI screen, `svg-diagrams.md` before any
-hand-authored diagram.
+**Plan = gated deck.** A deck that needs sign-off before code keeps the
+one-screen budget, puts every open decision near the top as a question block,
+and ends with a short block naming what approval unblocks. The full recipe —
+page order, the `details.html` split for supporting design — is "Plan-mode
+structure" in `document-quality.md`.
 
-**Done** when plan.html fits the screen budget, the pair stands alone, every
-open decision is settled or a question block, and `approval.json` reads
-`"approved"`.
+**Start from** `template.html`, copied to `plan.html` for a gated deck, or
+`canvas.html` with `data-canvas-kind="deck"` for an ungated one. **Read**
+`document-quality.md` before the body, `wireframe.md` before any option
+thumbnail or UI screen, `svg-diagrams.md` before any hand-authored diagram.
 
-### Plan discipline (do this before authoring)
+**Done** when every open decision is either answered in `answers.json`, a
+`settled` row, or an unanswered question block; the word meter is green (or
+the overage is explained in chat); and, for a gated deck, `approval.json`
+reads `"approved"`.
+
+### Deck discipline (do this before authoring)
 
 - **Research first.** Read the real files, schemas, helpers, and patterns. Name
   actual files, symbols, and data shapes — never invent them. Delegate wide
   exploration to a sub-agent when useful.
-- **Lead with reuse.** For each step, name what it reuses (existing files,
-  schema, components, helpers) before what it adds, so the plan explains the
-  genuinely new delta.
+- **Lead with reuse.** For each step, name what it reuses before what it adds,
+  so the deck explains the genuinely new delta.
 - **Decide hard-to-reverse bets first.** Call out the choices expensive to undo
   once data or callers depend on them — wire format, public ids, data-model
-  shape, auth/ownership — and get those right in the plan. Then scope to the
-  smallest first cut that proves the approach, stating what's in and what's
-  deferred.
-- **Planning is read-only.** Make no source edits while building or reviewing the
-  plan. Start editing only after the user approves the direction.
-- **Clarify vs. assume.** Don't ask *how* to build it — present the approach and
-  options in the plan. Ask a clarifying question only when an ambiguity would
-  change the design and you can't resolve it from the code; batch 2–4 via the
-  normal ask-user-question flow. Otherwise state the assumption and proceed, and
-  keep anything unresolved as a question block on `plan.html`. Argue
-  the default in prose — options render neutral, so don't put the lean in the
-  option text.
-- **The plan stands alone.** A reviewer opening it cold — no chat history —
+  shape, auth/ownership — and get those right. Then scope to the smallest first
+  cut that proves the approach, stating what's in and what's deferred.
+- **Authoring a deck is read-only.** Make no source edits while building or
+  reviewing it. Start editing only after the user answers or approves.
+- **Clarify vs. assume.** Don't ask *how* to build it — present the approach
+  and options as question blocks with `data-lean` on the pick. Ask a
+  clarifying question only when an ambiguity would change the design and you
+  can't resolve it from the code; batch 2–4 via the normal ask-user-question
+  flow. Otherwise mark the lean and proceed, and keep anything unresolved as a
+  question block.
+- **The deck stands alone.** A reviewer opening it cold — no chat history —
   should understand it. No "unlike the previous version" / "this revision"
   language. State the positive model directly.
-- **The plan is the approval gate.** After serving it, ask the user to review and
-  approve before you write code, and name which files/areas the work touches.
-  Presenting the plan + requesting sign-off *is* the approval step.
 
-**High-stakes plans** (architecture, backend, data-model, migration, multi-file)
-get one cheap adversarial self-review pass *after* surfacing, while the user
-reads — look for implicit hard-to-reverse decisions, unanchored steps,
-option-menus that should commit to one choice, filler, and detail that crept
-onto `plan.html` past its screen budget. Apply clear-cut fixes;
-route genuine judgment calls into the Open questions block.
+**High-stakes decks** (architecture, backend, data-model, migration,
+multi-file) get one cheap adversarial self-review pass *after* surfacing,
+while the user reads — look for implicit hard-to-reverse decisions, unanchored
+steps, option sets that should commit to one choice, filler, and content past
+the budget. Apply clear-cut fixes; route genuine judgment calls into a
+question block.
 
 ---
 
-## mockup
+## Board — looking
 
-**When.** The user needs to see UI: layout variants, a clickable prototype, a
-before/after, a state exploration. Preferred over ASCII sketches for anything
-visual.
+**When.** The reviewer's job is to look at something spatial: UI variants, a
+clickable prototype, a before/after, architecture, a flow, a sequence — any
+relationship a left-to-right scroll flattens.
 
-**Contains.** One or more `wf-frame` screens with real product content; inline
-`<style>`/`<script>` for clickable states and variant toggles when interaction
-makes the review sharper. Model secondary states that interaction would hide
-(popover, error, loading) as separate frames so they stay reviewable.
+**Contains.** Absolutely-positioned frames inside `#viewport > #world`, each
+carrying a stable `data-frame-id` (the comment anchor and the deep-link
+target: `page.html#frame-id`). Frame innards are plain HTML/SVG — the `wf-*`
+kit, `diagram.js` output, hand-authored SVG, stickies. No word budget; the
+board is judged on layout and pan/zoom behavior, not prose length.
 
-**Start from** `canvas.html`, renamed per variant (`mockup-a.html`,
-`mockup-b.html`), with `data-canvas-kind="mockup"` on the body. **Read**
-`wireframe.md`; the shared authoring bar in `document-quality.md` still applies.
+**Pins.** Comments on a board are x/y pins, not block comments — drop one by
+double-clicking a frame (or anywhere on the world) while composing. Pins
+anchor to world coordinates plus a `frameId`; they survive a frame being
+deleted or moved, and stay reachable from the comment panel.
 
-Interactive mockups are safe: the review UI only listens while Comment mode is
-on, so a reviewer clicking through a prototype never trips the comment picker.
+**Start from** `board.html`, with `data-canvas-kind="board"` already set.
+**Read** `wireframe.md` for frame authoring (realism, layout, the `wf-*`
+tokens) and `svg-diagrams.md` for diagram frames.
 
-**Done** when every frame reads as a real screen (no lorem, no dead controls
-that look live), variants are labelled, and the reviewer can comment on any
-control.
-
----
-
-## decide
-
-**When.** The task is a choice between options — a library, an approach, a
-schema, a rollout — and you want the decision captured, not just discussed.
-
-**Contains.** An options matrix (a `columns` block or a table: option × criteria)
-and one or more **interactive question blocks** as the primary surface; the
-question blocks are how the decision gets recorded in `answers.json`. Options
-render neutral — argue for a default in the prose around the matrix, not in the
-option text; the reviewer can also pick **✎ Other…** or **◇ You decide, Claude**.
-
-**Start from** `canvas.html`, with `data-canvas-kind="decision"` on the body.
-**Read** the shared authoring bar in `document-quality.md`.
-
-**Gate optional** — turn it on (drop `data-approval="off"`) only when you want an
-explicit sign-off on the chosen option, not just an answer. A gated page's
-decision is folded into the same **Send to Claude** popover as any pending
-comments, not a separate step.
-
-**Done** when the answer lands in `answers.json` (and, if gated,
-`approval.json`).
+**Done** when every frame reads as a real screen or a readable diagram (no
+lorem, no dead controls that look live), the Fit view shows the whole board
+without clipping, and deep links land on the right frame.
 
 ---
 
-## diagram
-
-**When.** You need to show relationships in two dimensions — architecture, data
-flow, lanes, fan-in/fan-out, a sequence — where a left-to-right chain is too
-flat.
-
-**Contains.** One diagram per decision. Prefer a `diagram.js` JSON spec for a
-sequence (actors over time) or flow (branching logic) — it emits token-styled SVG
-with `data-cmt-id` anchors for you. Use a hand-authored inline `<svg>` for
-freeform architecture/topology, tokens via `var(--ink)` etc., nodes tagged
-`data-cmt-id`. Pick the form from the chooser at the top of `svg-diagrams.md`.
-
-**Start from** `canvas.html`, with `data-canvas-kind="diagram"` on the body.
-**Read** `svg-diagrams.md` (the chooser picks diagram.js vs. hand SVG vs. the
-div kit). For a diagram.js spec, load `diagram.js` in the artifact after
-`comments.js`.
-
-**Done** when the diagram is readable at 100% zoom, labels don't overlap edges,
-and the discussable nodes/participants are anchored (automatic for diagram.js
-specs, hand-tagged for SVG).
-
----
-
-## doc
+## doc — reading
 
 **When.** A reviewable freeform document — a decision record, a spec, release
-notes, a walkthrough — that's better read and commented on in a browser than
-pasted into chat.
+notes, a walkthrough — read and commented on in a browser rather than pasted
+into chat.
 
 **Contains.** Prose and the shared building blocks (callouts, file trees,
-annotated code, tables). Structure is up to the document; the shared authoring
-bar still holds.
+annotated code, tables). Structure is up to the document; the shared
+authoring bar in `document-quality.md` still holds. Budget: 600 visible words
+(the word meter counts `<main>` as rendered by default — collapsed `<details>`
+count only their summary).
 
-**Start from** `canvas.html` — its seeded `data-canvas-kind="doc"` matches this
-mode already. **Read** the shared authoring bar in `document-quality.md`.
+**Start from** `canvas.html` — its seeded `data-canvas-kind="doc"` matches
+this surface already. **Read** the shared authoring bar in
+`document-quality.md`.
 
-**Done** when it stands alone and reads cleanly at the pre-handoff check.
+**Done** when it stands alone, reads cleanly at the pre-handoff check, and the
+word meter is green or the overage is explained in chat.
+
+---
+
+## Legacy
+
+Workspaces seeded before this rewrite may carry the old kinds —
+`plan` / `mockup` / `diagram` / `decision` — on `data-canvas-kind`. They keep
+loading, taking comments, and (for `plan`) approving exactly as before;
+`deck.js` and `board.js` only activate on `data-canvas-kind="deck"` /
+`"board"` and leave everything else alone. Don't convert an old workspace to
+the new kinds just to match this doc — new work uses the three surfaces above,
+old work keeps working as it is.
