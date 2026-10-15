@@ -6,7 +6,8 @@ Claude Code plugin for managing and documenting the homelab — Proxmox, self-ho
 
 | Command | Description |
 |---------|-------------|
-| `/homelab:handoff` | Generate a session handoff document summarising what was done, what changed, and what's next |
+| `/homelab:handoff` | Pause: write a handoff to the central ~/handoffs git repo (`done` deletes it) |
+| `/homelab:resume` | List paused handoffs in ~/handoffs, pick one, check drift, continue |
 
 ## Adding More Commands
 

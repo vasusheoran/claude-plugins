@@ -47,7 +47,8 @@ Homelab infrastructure management — Proxmox, self-hosted services, Cloudflare 
 
 | Command | Description |
 |---------|-------------|
-| `/homelab:handoff` | Generate a session handoff doc summarising what changed, current infra state, and what's next |
+| `/homelab:handoff` | Pause: write a handoff doc a fresh session can resume from |
+| `/homelab:resume` | Resume from the newest paused handoff |
 
 **Install individually:**
 ```
@@ -77,7 +78,8 @@ claude-plugins/
     │   │   └── plugin.json
     │   ├── README.md
     │   └── commands/
-    │       └── handoff.md
+    │       ├── handoff.md
+    │       └── resume.md
     └── statusline/
         ├── .claude-plugin/
         │   └── plugin.json
