@@ -133,6 +133,9 @@ never author them yourself:
 - **◇ You decide, Claude** — the existing `"__defer__"` behavior. Claude
   applies its own recommendation when reading answers.
 
+Every question block states what it costs to undo, in the first sentences
+of its prose (see "Decision first").
+
 Clicking a selected option again unselects it (`value: null` = open again).
 
 - `data-question-mode`: `single` (radio), `multi` (checkbox), or `freeform`
@@ -164,8 +167,37 @@ description instead of plain text:
 — as is the `.goboard` deep link into a companion Board page. `.meta .t`/`.d`
 text counts toward the word budget like any other card content.
 
+## Decision first
+
+The first screen of every artifact is the decision card, before any
+background. It holds three things: the question being decided, Claude's pick,
+and what it costs to undo. Write the undo cost in plain words, one line, on
+every decision card: "easy to undo later" for a two-way door, "hard to undo
+once X ships" for a one-way door, naming X.
+
+## Pick the medium
+
+Choose the visual by what the reviewer has to understand, then build it so
+they can comment on a part of it.
+
+| The reviewer must understand | Use | Notes |
+|------------------------------|-----|-------|
+| How parts connect (structure) | Diagram | `references/svg-diagrams.md` |
+| Something that happens over time | Stepped animation in SVG/CSS with step and play controls | Give each step its own stable `data-cmt-id` so a comment lands on one step |
+| A tradeoff with a knob | Interactive: a slider or toggle that recomputes the outcome | Show the result next to the control |
+| A decision that a number settles | Chart from real data | Cite the query or file the numbers came from, on the chart |
+| A UI change | Before/after pair, or Board frames | `references/wireframe.md` |
+
+No video files. Animated SVG/CSS steps do the same job, stay commentable, and
+need no encoding. If prose is the only visual on a decision card, the card is
+not done.
+
 ## Tone
 
+- Plain words. Use the user's words. Define any other term in place the first
+  time it appears, or replace it. Expand abbreviations. Read each card as if
+  opening it cold, with no chat history: "each run is a full session up to the
+  plan gate" means nothing to someone who never used "session" or "plan gate".
 - Specifics over vague prose. No "make it work" placeholder steps.
 - No hero copy, value props, or slogans.
 - State the positive model directly. Never frame the artifact against absent

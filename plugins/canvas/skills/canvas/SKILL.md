@@ -1,6 +1,13 @@
 ---
-description: Build a local canvas of reviewable HTML artifacts — implementation plans, UI mockups and prototypes, decision docs, architecture/flow diagrams, and freeform docs — served by the local canvasd daemon so the user sees, comments on, and approves them in a browser before you act. Fully offline (stdlib Python + vanilla JS), no cloud, no accounts, no dependencies.
+description: Help the user make better, faster decisions by showing them, visually, in a local canvas of reviewable HTML pages. Every page opens with the decision being asked, Claude's pick, and what it costs to undo. Covers implementation plans, UI mockups and prototypes, decision docs, architecture/flow diagrams, and freeform docs, served by the local canvasd daemon so the user sees, comments on, and approves them in a browser before you act. Fully offline (stdlib Python + vanilla JS), no cloud, no accounts, no dependencies.
 ---
+
+A canvas exists to help the user make better and faster decisions, and it does
+that visually: diagrams, animated steps, interactives, charts. The user takes
+Claude's pick most of the time, so picking is cheap. Understanding is the
+cost, and every artifact is built to remove it. **Every artifact opens with the
+decision ask** (what is being decided, Claude's pick, what it costs to undo)
+before any background.
 
 A **canvas** is a per-topic workspace of HTML artifacts the user reviews in a
 browser. One local daemon (**canvasd**, 127.0.0.1 only) serves every canvas on
@@ -75,6 +82,33 @@ Author each artifact from its template. Rules (full detail in
   `#viewport > #world` (template: `board.html`); `board.js` gives pan/zoom,
   Fit, and deep links (`page.html#frame-id`), and renders x/y pin comments
   from `comments.json`.
+- **Decision first.** Read `references/document-quality.md` before writing the
+  body. The first thing on the page is the decision card. A one-line status
+  banner may sit above it; a title block or problem summary may not. A card has this
+  shape, in this order: the question as its heading; one line starting "My
+  pick:" with the choice; one line starting "Undo:" in plain words ("easy to
+  undo later, it's a setting" or "hard to undo once X ships"); the visual;
+  options. Background goes after the cards or on a second page. Every card
+  carries its own "My pick:" and "Undo:" lines.
+- **Pick the medium.** Every decision gets a visual, chosen by what the
+  reviewer must grasp: structure → diagram; anything over time → stepped
+  SVG/CSS animation with Step and Play controls, each step a stable
+  `data-cmt-id` (prose or a static table is not enough); a tradeoff with a knob
+  → a slider that recomputes the outcome; a number decides it → a chart from
+  real data, citing its source; UI → before/after. No video files. Chooser:
+  `references/document-quality.md` ("Pick the medium").
+- **Plain words.** Write for a product owner reading cold. Use the user's
+  words. Any term the user did not use (a protocol, an acronym, a pattern name,
+  an internal word like "teardown", "API", "config", "jitter") is defined in a
+  few words in brackets where it first appears, or replaced with plain words
+  ("a setting" for "config"). Expand abbreviations. If a sentence needs the
+  chat history to make sense, rewrite it.
+- **One screen.** The decision page stays near 200 visible words, counting
+  text inside diagrams and button labels. A gated deck may carry more cards
+  (deck.js shows one at a time), but each card stays near 90 words. Reasoning,
+  evidence, edge cases and lists of examples go on a second page
+  (`details.html`) or inside a collapsed `<details>`. Count before you write
+  the file; trim until it fits.
 - **Budget meter.** A corner chip shows visible words against the surface's
   budget (deck 200 / doc 600 / Board none); it's a signal, never a block.
 - **Inline CSS/JS is allowed** — use the `<style>`/`<script>` slots for styling,
