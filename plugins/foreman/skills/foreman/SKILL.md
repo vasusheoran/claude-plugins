@@ -1,257 +1,212 @@
 ---
-description: Plan a piece of work as a reviewable canvas artifact, get approval, then implement it by delegating work items to worker Claude sessions (Haiku/Sonnet/Opus) in their own herdr tabs under strict TDD, with the latest top-tier model as orchestrator and reviewer. Use when the user says "plan it out and use opus/sonnet to implement", "/foreman <task>", or any equivalent.
+description: Default entry for any non-trivial build, plan, fix or design request, for "think this through", for pushback on how something works or on an earlier decision, and for "give me a prompt (for another session)", even when /foreman is not named; load it before replying and it picks the path (answer, decide, build, handoff). Runs a standing brief (raw source, premise check, depth pass, plan skeleton, one visual per decision), plans on canvas for approval, then delegates to Haiku/Sonnet/Opus worker sessions in herdr tabs under strict TDD, with the top-tier model as orchestrator and reviewer.
 ---
 
-Run one task through the user's standard plan → approve → delegate → verify
-loop. The main session is the **orchestrator**: it plans, dispatches, and
-reviews, and it must run on the latest top-tier model (currently Fable) — if
-the session is on a lower-tier model, say so before starting rather than
-silently orchestrating from it. Workers write the code, each visible in its
-own herdr tab (Phase 3).
+The main session is the **orchestrator**: it plans, dispatches and reviews,
+and it runs on the latest top-tier model (currently Fable). On a lower-tier
+model, say so before starting. Workers write the code, each in its own herdr
+tab (Phase 3).
 
-**First act — label your own tab.** Rename the tab this session runs in so
-the user can tell it from the worker tabs: `herdr pane current` → take the
-`tab_id` → `herdr tab rename <tab_id> orchestrator`.
+## Stop requests outrank everything
 
-## Stop requests — outrank everything
+A message asking to stop, pause, abort or kill the run is handled before
+anything else in that turn: the interrupts are the first tool calls, with no
+status summary first, and they override an in-progress dispatch or limit
+park. Keep a roster so a stop needs no discovery: on every spawn, append
+`<item> foreman-<item> <pane_id> <tab_id>` to `foreman-workers.txt` in the
+session scratchpad. A stop pass walks the roster (`herdr agent list` is the
+fallback).
 
-A user message asking to stop, pause, abort, or kill the run is handled
-before anything else in that turn: the interrupts are the first tool calls
-— no status summary first — and they override an in-progress dispatch or
-limit park. Keep a roster so a stop needs no discovery: on every spawn,
-append `<item> foreman-<item> <pane_id> <tab_id>` to `foreman-workers.txt`
-in the session scratchpad; a stop pass walks the roster (`herdr agent list`
-is the fallback if it's missing).
+- **stop / pause**: `herdr pane send-keys <pane_id> Escape` to every worker.
+  Sessions and tabs stay alive; resume with `herdr pane run <pane_id> "continue"`.
+- **abort / kill**: Escape every worker, then `herdr tab close <tab_id>` each.
+  Partial diffs stay uncommitted in the worktree for review.
 
-Two levels:
+Then tell the user what was stopped and what was in flight, and stand by.
 
-- **stop / pause** — `herdr pane send-keys <pane_id> Escape` to every
-  worker. Turns interrupt mid-flight; sessions and tabs stay alive. Resume
-  later with `herdr pane run <pane_id> "continue"`.
-- **abort / kill** — Escape every worker, then `herdr tab close <tab_id>`
-  each. Partial diffs stay uncommitted in the worktree for review.
+## Pick the path
 
-After either, tell the user what was stopped and what was in flight, then
-stand by.
+The first line of the reply names the path. Choose the lightest one that
+fits; the user can override ("just do it", "plan only").
+
+- **answer**: a question or a trivial change. Answer or do it in chat. No
+  canvas, no workers, no brief.
+- **decide**: open questions, no build asked. Standing brief, then a
+  decision canvas only.
+- **build**: standing brief → plan → approval → workers → verify.
+- **handoff**: the user wants a prompt for another session ("give me a
+  prompt for this"). Standing brief → plan → approval → write `prompt.md`
+  and print it. Nothing is built here.
+
+On the build path, label your own tab first so the user can tell it from
+worker tabs: `herdr pane current` → `tab_id` → `herdr tab rename <tab_id>
+orchestrator`.
+
+## Standing brief
+
+Runs on decide, build and handoff without being asked. Scale it to the task:
+a bug with a clear repro needs a few lines, not ceremony. Every item below
+appears in the reply or plan, under its own label.
+
+1. **Raw source.** Lead with the rawest observation of the thing itself
+   and read it before planning: logs from real runs on real devices (and
+   where they live), real query or event logs from prod through read-only
+   paths, a packet capture or trace on a real machine, the user's own
+   records, past session transcripts and git history. Code, scripts and
+   docs say what should happen, so they come after and don't count as the
+   raw source. For each, say how you will read it (count this, group by
+   that, replay that request). Examples by domain: DNS work starts from
+   query logs and a capture on a real device; a pipeline from its real
+   inputs and failure rows; a site or funnel from analytics events and
+   real signups; a workflow change from the user's own history. If you can't reach it, name
+   exactly what you would read and what you'd look for. When the user
+   mentions something that happened before, list its transcripts and git
+   history here too.
+2. **Premise check.** Invoke the **grill-me** skill. Write it as "Your
+   model: …" (the user's mental model in a line or two), then "Where it
+   breaks:" with each claim in the request, including claims about the
+   past ("we fixed this before", "it's documented") and pushback on
+   something you did earlier. For each, say plainly whether it is wrong,
+   unverified, or carries a cost the user didn't mention, with the evidence
+   or the check that would settle it. Never open with "you're right", even
+   when the user mostly is. You are not a yes man.
+3. **Depth pass**, at most 4 lines: at least two things a top professional
+   would do that weren't asked. Each is a method, not a feature: a test
+   matrix, a reference dataset, a standard, a measurement, and it names its
+   tool. Then the outside oracle that shows the result is right. Label
+   them "Unasked: …" and "Oracle: …". The oracle is independent of Claude,
+   the user and the thing being built: a third-party test service, a
+   capture on a real device, a vendor's own delivery report, a labelled
+   reference dataset, a re-measurement of real usage after release.
+4. **Plan skeleton**, always all five, as a table with one row per task
+   and every cell filled: phase, task, validation (that task's own check
+   against the oracle, never one global "test it"), changes (the files or
+   areas it touches). Below the table, a separate **Revalidation** step that
+   re-checks the live system after merge or deploy. Any metric measured
+   later gets a date and the command to re-measure.
+5. **One visual per decision.** List every decision and every open
+   question, including the ones you ask the user, as `decision → medium:
+   what it shows`. The medium is one of five, picked for that decision:
+   diagram (structure), stepped animation (anything over time), interactive
+   mock (a tradeoff with a knob), chart from real data (a number decides
+   it), before/after (UI). A bare "diagram", a table, a question without
+   its visual, or one visual for everything is wrong.
+6. **Plain words.** Define or replace any term the user hasn't used.
+
+If the canvas tools are unavailable, present the same plan in the reply as
+markdown and stop at the approval point. Keep that reply under about 600
+words, in this order: path line, premise, raw source, depth, decisions
+with their visuals, plan table, revalidation, approval line. One line per
+assumption, per decision and per raw source; one table row per task. A
+long reply buries the parts the user has to act on.
 
 ## Delegation map
 
-Three mechanisms, one rule each:
+- **In-process subagents** (Agent tool: Explore, general-purpose): research
+  and spot-check reads. Never for source edits.
+- **Herdr-tab workers**: anything that edits source, except the trivial-edit
+  carve-out in Phase 3. One tab per item.
+- **Native agent teams**: only when workers must coordinate with each other
+  mid-flight. If the orchestrator can sequence the items, it does.
 
-- **In-process subagents** (Agent tool: Explore, general-purpose) — research,
-  exploration, spot-check reads. Findings return straight into orchestrator
-  context: no tab, no session-startup cost, nothing to scrape back. Never
-  for source edits.
-- **Herdr-tab workers** — anything that edits source, except the trivial-edit
-  carve-out in Phase 3. One tab per item, visible and steerable.
-- **Native agent teams** — only when workers must coordinate with *each
-  other* mid-flight (shared task list / mailbox, e.g. two agents negotiating
-  an interface both build against). If the orchestrator can sequence the
-  items instead, it should — the orchestrator is the coordinator.
+**Prose rule (all phases):** before writing prose a human will read (plans,
+ADRs, `prompt.md`, PR text, docs, report-backs), invoke **anti-ai-writing**
+and apply it. Worker prompts that produce prose carry its rules, and review
+spot-checks them.
 
-**Prose rule (all phases):** before writing any prose a human will read —
-plan artifacts, ADRs, handoffs, PR text, doc updates, report-backs — invoke
-the **anti-ai-writing** skill and apply it. Workers inherit the rule: any
-worker prompt that has the agent writing docs or user-facing text must
-include the anti-ai-writing constraints (paste the relevant rules; workers
-get no chat context). Spot-check their prose output against it in review,
-same as TDD compliance.
+## Phase 1: Research (read-only)
 
-## Phase 1 — Research (read-only)
-
-Read the real files before writing a word of plan. Name actual files, symbols,
+Start from the raw source named in the brief. Name actual files, symbols and
 data shapes; never invent them. Delegate wide exploration to an Explore
-subagent when useful. Make **no source edits** until approval.
+subagent. No source edits until approval.
 
-**Underspecified task? Brainstorm before planning.** If the goal or approach
-is genuinely open — the request names an outcome but not what to build —
-invoke the **superpowers:brainstorming** skill for its dialogue: clarify
-purpose, constraints, and success criteria one question at a time, propose
-2–3 approaches with a recommendation, YAGNI ruthlessly. Use only that
-dialogue, then stop: the agreed design feeds the Phase 2 canvas plan, which
-replaces brainstorming's own artifacts and gates — do not write
-`docs/superpowers/specs/` files, do not run its spec-review loop, and do
-not invoke writing-plans. A task that arrives well-specified (clear
-contract, known shape) skips this step.
+If the goal is genuinely open (an outcome but no shape), use the dialogue
+from **superpowers:brainstorming**: one question at a time, 2–3 approaches
+with a recommendation, YAGNI. Use only the dialogue; the agreed design feeds
+the Phase 2 plan. Don't write `docs/superpowers/specs/` files, run its
+spec-review loop or invoke writing-plans.
 
-## Phase 2 — Plan on canvas
+## Phase 2: Plan on canvas
 
 Invoke the **canvas** skill in plan mode (workspace `canvas/<slug>/`) and
-follow its lifecycle exactly — it owns the mechanics (two-step open, review
-loop, approval gate); don't improvise around it. Plan discipline:
+follow its lifecycle exactly; it owns the open, review loop and approval
+gate. The plan leads with reuse, decides hard-to-reverse bets (wire formats,
+IDs, schema, contracts), and carries the whole standing brief.
 
-- Lead with reuse: what each step builds on before what it adds.
-- Decide hard-to-reverse bets in the plan (wire formats, IDs, schema, contracts).
+Grill before you share: run grill-me on the draft, fold the answers in, put
+the decision digest in the artifact (one plain line per decision) and the
+must-ask questions as question blocks with a recommended default.
 
-**Grill before you share.** Once the plan is drafted but before launching the
-browser or giving the user the URL, invoke the **grill-me** skill on the
-draft: generate the hard reviewer questions, answer them from code and
-evidence, and fold the answers into the plan. What survives triage lands in
-the artifact — the decision digest as a short section (one line per decision,
-plain language, never the raw Q&A), and the genuine must-ask questions as
-interactive question blocks with a recommended default. Everything else:
-state the assumption and proceed. Ask the user only what grill-me could not
-settle.
+Share the URL and **stop until `approval.state == "approved"`**
+(`canvas_wait`). Apply comments by editing the artifact (stable block ids).
 
-Then share the URL and **stop until the canvas reports
-`approval.state == "approved"`** (`canvas_wait`). Apply comment feedback by
-editing the artifact (stable block ids).
+On the handoff path, end the plan by saying that once the user approves you
+will write `prompt.md`.
 
-## Phase 3 — Implement via workers (after approval only)
+## Handoff: prompt.md
 
-Split the plan into self-contained work items. **Every item that edits source
-runs as a worker Claude session in its own herdr tab** — one tab per worker,
-so the user can watch and steer each one live. Never run implementation
-through the in-process Agent tool; that tool is reserved for quick read-only
-helpers (Phase 1 exploration, spot-check reads) whose output only the
-orchestrator needs.
+After approval, write `prompt.md` into the canvas workspace dir and print it
+in the reply. It is self-contained for a fresh session with no chat context:
 
-Worker model tiers (pass via `--model`):
+- the goal, in the user's words where possible;
+- the approved decisions;
+- the plan skeleton (tasks, phases, validation per task, changes,
+  revalidation);
+- the raw sources to read first, and what to look for;
+- the standing-brief rules in brief: read raw sources before planning,
+  challenge the premise, name the outside oracle, TDD;
+- "use /foreman".
 
-- **haiku** — trivial mechanical items: renames, moves, config plumbing,
-  applying a change the plan already spells out line by line.
-- **sonnet** — well-specified items: mirrors, adapters, test scaffolds,
+The handoff path ends there.
+
+## Phase 3: Implement via workers (after approval only)
+
+**Read `references/workers.md` before spawning.** It has the spawn recipe,
+monitoring and agent teams.
+
+Split the plan into self-contained items. Every item that edits source runs
+as a worker Claude session in its own herdr tab. Never implement through the
+in-process Agent tool. Model tiers (`--model`):
+
+- **haiku**: mechanical items such as renames, moves, config plumbing, or a
+  change the plan spells out line by line.
+- **sonnet**: well-specified items such as adapters, test scaffolds, or
   refactors with a clear contract.
-- **opus** — design-heavy or gnarly items: routing logic, tricky algorithms,
-  cross-file surgery, anything where the contract leaves room for judgment.
+- **opus**: design-heavy items such as routing logic, tricky algorithms or
+  cross-file surgery.
 
-When torn between two tiers, take the lower one and escalate only if the
-item comes back wrong — a redo on sonnet costs less than defaulting to opus.
+Torn between two tiers, take the lower one and escalate if the item comes
+back wrong. The orchestrator dispatches, reviews diffs, resolves conflicts
+and re-dispatches. One exception to "the orchestrator writes no code": an
+item the plan spells out exactly (a rename, a one-liner, a config value) is
+applied directly, since a worker spawn costs more than the edit.
 
-The orchestrator dispatches, reviews worker diffs, resolves conflicts, and
-re-dispatches items that come back wrong. One exception to "the orchestrator
-writes no code": an item the plan already spells out exactly — a rename, a
-one-liner, a config value — is applied directly by the orchestrator, because
-a worker spawn pays a full session startup that dwarfs such an edit.
-Anything with room for judgment still goes to a worker tab.
+**TDD is non-negotiable**: behavior-level tests written and shown failing
+first, then the minimum implementation, never both in one pass. Tell every
+worker and spot-check that they complied.
 
-### Spawning a worker
+## Usage limits: park and resume, never stop
 
-Mechanics (herdr socket CLI; `herdr agent --help` for details). Two commands
-per worker — start it, then move its pane into its own labeled tab:
+A usage or rate limit never ends the run and never waits on the user.
 
-    herdr agent start foreman-<item> --workspace <ws-id> \
-        --cwd <worktree-or-project> --no-focus -- \
-        claude --model <haiku|sonnet|opus> --permission-mode auto \
-        --setting-sources user,local "<self-contained prompt>"
-    # → note the pane_id in the result
-    herdr pane move <pane_id> --new-tab --label "foreman:<item>" --no-focus
-    # → append "<item> foreman-<item> <pane_id> <tab_id>" to the stop roster
+1. Note where the run stands (done, dispatched, pending) so the resume turn
+   needn't reconstruct it.
+2. Park with `Bash` `sleep 1800` and `run_in_background: true`. If the limit
+   names a reset time, sleep until just past it.
+3. On wake, nudge limited workers with `herdr pane run <pane_id>
+   "continue"`, respawn any that died, dispatch pending items. Resume from
+   the note; don't re-read diffs already reviewed. Still limited? Park again.
 
-**Working in a git worktree.** When the feature is isolated in a git worktree
-(ADR 0020 / `scripts/wt.sh` / `herdr worktree`), pass the worktree path as
-`--cwd`, not the main checkout — `--cwd` sets both the worker's working
-directory and the herdr pane/tab cwd in one shot, so the worker and its tab
-are rooted in the tree. No worktree in play → the project root as before.
-Directly-applied trivial edits (the orchestrator carve-out below) land in the
-same worktree via `git -C <worktree>` / absolute paths — the orchestrator's
-own tab stays on the main checkout (a live session's cwd is fixed at launch;
-herdr can't chdir it, and this checkout is the review/merge home).
+Leave worker tabs open across a park.
 
-`--setting-sources user,local` drops the project CLAUDE.md from each worker
-(a large per-spawn token load; verified 2026-07-26) while keeping
-subscription OAuth and the local auto-mode/permission rules. Do NOT use
-`--bare` for this — it disables OAuth entirely and the worker starts logged
-out. Consequence: the worker prompt must carry every repo rule the item
-touches (TDD, gates, conventions, verification command) — which it already
-must, since workers get no chat context. Give each worker only its item's
-slice of the plan, never the whole plan.
+## Phase 4: Verify, close, revalidate
 
-Find your own workspace id with `herdr pane current`. Do NOT use
-`herdr tab create` + `agent start --tab` — that leaves a stray empty shell
-pane in the tab and ignores the tab's cwd; the start-then-move sequence
-yields a clean single-pane tab. Dispatch independent items in parallel — one
-tab each — and report the tab labels as you spawn them so the user knows
-what's running where. Each worker prompt must be self-contained (workers get
-no chat context): the exact files to touch, the contract
-(inputs/outputs/invariants from the plan), the verification command, and the
-TDD requirement below.
-
-Monitor with `herdr agent wait foreman-<item> --status idle --timeout <ms>`
-— waiting costs nothing; don't poll with reads. Review the *work* via
-`git diff`, never by reading the transcript; read the pane only to
-spot-check TDD compliance or prose rules, capped
-(`herdr agent read foreman-<item> --source visible --lines 60`;
-`--source recent` can come back empty). Follow-ups go via
-`herdr pane run <pane_id> "<text>"` — `agent send` types text without
-pressing Enter, so a send-only nudge never lands. Workers run in **auto mode**
-(`--permission-mode auto` above) so they don't stall on routine permission
-prompts while the user is away. If one still goes `blocked` — the auto-mode
-classifier denied something — tell the user which tab needs a click rather
-than working around it.
-Leave the tab open until the item's diff is reviewed and accepted, then
-`herdr tab close` it.
-
-### Agent teams
-
-The same visibility rule applies to teams-shaped work. Default to the
-tab-per-worker pattern above; reach for native Claude Code agent teams only
-when their shared task list / mailbox coordination is genuinely required.
-
-Native teams DO work under herdr, but need a bridge (verified 2026-07-26,
-Claude Code v2.1.206). In tmux teammate mode with no surrounding tmux, the
-team lead creates a **dedicated tmux server**: socket
-`claude-swarm-<lead-pid>` (in `/tmp/tmux-$(id -u)/`), session `claude-swarm`,
-one window `swarm-view` with one split pane per teammate — nothing shows up
-in herdr on its own. So:
-
-1. Spawn the team-lead session like any worker (start-then-move recipe) with
-   two extra env vars: `--env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and
-   `--env TERM_PROGRAM=` (blank). The blank matters: herdr panes inherit
-   `TERM_PROGRAM=iTerm.app` from the login terminal, and with it set the
-   lead stops on an interactive iTerm2-vs-tmux picker instead of going
-   straight to tmux. Pass `--teammate-mode tmux` on the `claude` argv.
-2. Once the lead reports teammates started (its status line prints the
-   socket: `View teammates: tmux -L claude-swarm-<pid> a`), open one watch
-   tab for the whole team:
-
-       herdr agent start swarm-view --workspace <ws-id> --no-focus -- \
-           tmux -L claude-swarm-<pid> attach -t claude-swarm
-       herdr pane move <pane_id> --new-tab --label "teams:swarm-view" --no-focus
-
-   Teammates are split panes in that single window, so it's one tab per
-   team, not per teammate. Find the socket with `ls /tmp/tmux-$(id -u)/`
-   (newest `claude-swarm-*`) if you didn't catch the status line. Note the
-   lead's own TUI also lists teammates at the bottom (`⏺ main / ◯ <name>`,
-   the agents panel) — that's an inline viewer inside the lead's screen,
-   not where teammates run; the swarm-view tab is the live side-by-side
-   view.
-3. Cleanup: the swarm server dies with the lead, and the attach pane (and
-   its tab) dies with the server. Stale socket files can linger in
-   `/tmp/tmux-<uid>/` — remove them; if a swarm session outlives its lead,
-   `tmux -L claude-swarm-<pid> kill-server`.
-
-**TDD is non-negotiable** (user's global rule): behavior-level tests written
-and shown failing first, then minimum implementation, never both in one pass.
-Instruct every worker accordingly and spot-check that they complied.
-
-## Usage limits — park and resume, never stop
-
-A usage or rate limit (yours or a worker's) never ends the run and never
-waits on the user. When one hits:
-
-1. Note where the run stands — items done, dispatched, still pending — so
-   the resume turn doesn't have to reconstruct it.
-2. Park with a background timer: `Bash` `sleep 1800` with
-   `run_in_background: true` (foreground sleep is blocked; the background
-   command re-invokes you when it exits). If the limit message names a reset
-   time, sleep until just past that instead of the default 30 min.
-3. On wake, retry: nudge limited workers with
-   `herdr pane run <pane_id> "continue"`, respawn any that died, dispatch
-   the next pending items. Resume from the state note — don't re-read
-   files or diffs already reviewed. Still limited? Park again. Repeat
-   until work flows.
-
-Cadence is deliberately loose — 30 min or longer is fine. The goal is that
-when limits reset the run picks itself back up while the user is away, not
-that it resumes on the exact minute. Leave worker tabs open across a park:
-a limited worker resumes with a nudge; it doesn't need a fresh spawn.
-
-## Phase 4 — Verify & close
-
-- Run the full relevant test suites yourself (don't trust worker claims).
-- Compare results against the plan's gates/artifacts; report honestly,
+- Run the relevant test suites yourself; don't trust worker claims.
+- Check results against each task's validation and oracle. Report honestly,
   including failures and skipped items.
-- Decisions that shaped the outcome → dated ADR (append-only, supersede never
-  edit). Update the plan banner to IMPLEMENTED with the date. No docs that
-  restate code.
+- Run the revalidation step after merge or deploy, on the live system.
+- Decisions that shaped the outcome go in a dated ADR (append-only,
+  supersede, never edit). Update the plan banner to IMPLEMENTED with the
+  date. No docs that restate code.
+- When a metric can only be measured later, add an ADR line and a memory
+  note with the re-measure date and the command.

@@ -1,71 +1,85 @@
 ---
-description: Interrogate your own draft — plan, design, decision, or nontrivial answer — before presenting it. Generate the questions a demanding reviewer would ask, answer them yourself from code and evidence, fold the answers back in, and surface only the decisions that matter. Ask the user only what evidence cannot settle. Use before presenting any plan or design, when foreman reaches its grill step, or when the user says "/grill-me".
+description: Challenge the user's premise and your own draft (plan, design, decision, nontrivial answer, or a spec/plan/doc the user shares) before anyone builds on it. Restate the user's mental model, test its assumptions against evidence, generate the questions a demanding reviewer would ask, answer them from code and data, and surface only the decisions that matter. Use before presenting any plan or design, at foreman's premise check, when reviewing a shared spec or plan, or when the user says "think this through", "don't be a yes man", "challenge my assumptions", "grill yourself", "/grill-me" or "/grillme".
 ---
 
-Grill your own draft the way a skeptical senior reviewer would, then answer
-the grilling yourself. The output is a better draft plus a short decision
-digest — not a transcript of self-doubt.
+Grill the premise and the draft the way a skeptical senior reviewer would,
+then answer the grilling yourself. The output is a better draft plus a short
+digest, not a transcript of self-doubt. Grill something concrete: a draft,
+a request, or a doc.
 
-Run this after a draft exists and before the user sees it. Grilling a blank
-page produces generic questions; grill something concrete.
+**Shared doc?** When the input is a spec, RFC or plan the user shares, read
+the whole doc first; don't grill from a skim.
 
-## 1. Generate the questions
+## 1. Map and question
 
-Write down 8–15 questions against the draft. Pull from whichever of these
-apply; skip dimensions with nothing real behind them:
+Map the consequential decisions and their dependencies (B only matters if A
+is chosen, C contradicts D). Then write 8–15 questions, starting with these
+two:
 
-- Assumptions: what does the draft assume about current behavior that you
-  have not read in the code?
-- Contracts: inputs, outputs, schemas, wire formats, IDs — anything
-  hard to reverse once shipped.
-- Edge cases and failure modes: empty, concurrent, restarted mid-way,
-  partial write, stale state.
-- Compatibility: existing data, existing callers, migration, rollback.
-- Security and permissions: who can reach this, what does it leak.
-- Verification: how will you know it worked; what test proves the contract.
+- **Premise.** Restate the user's mental model in one or two lines. List
+  what in the request is an assumption rather than a fact. Test each
+  against evidence and say plainly where it breaks or is unverified, or
+  what it costs that the user didn't mention.
+- **Raw source.** Is there primary data (prod data, logs, captures, real
+  devices, past transcripts, git history) that settles this and hasn't been
+  read?
+
+Then whichever of these apply:
+
+- Assumptions about current behavior you haven't read in the code.
+- Contracts: inputs, outputs, schemas, wire formats, IDs.
+- Edge cases: empty, concurrent, restarted mid-way, partial write, stale state.
+- Compatibility: existing data and callers, migration, rollback.
+- Security: who can reach this, what it leaks.
+- Verification: what outside check proves it worked.
 - Operations: restart, logs, config, what breaks at 3am.
-- Scope: what is deliberately not being done, and does the draft say so.
+- Scope: what is deliberately left out, and whether the draft says so.
 
-No theater. A question you already know the answer to, invented to look
-thorough, wastes the reader's trust. Every question must be one you could
-plausibly get wrong.
+Every question must be one you could plausibly get wrong. A question
+invented to look thorough wastes the reader's trust.
 
 ## 2. Answer them yourself
 
-Answer each question with evidence, not vibes:
+Answer with evidence, not vibes. Settle these from the code before asking
+anyone:
 
-- Prefer the code: read the file, run a read-only command, cite what you
-  found (`file:line`, command output). "Probably" means you haven't checked.
-- Knowledge answers are fine where code cannot decide (library semantics,
-  protocol rules) — name the source you're relying on.
-- An answer that changes the draft is the good outcome. Edit the draft
-  immediately; that question is now resolved and needs no mention.
+- existence: does the table, column, endpoint or pattern the draft names
+  exist?
+- collisions: migration numbers, routes, env vars, keys already taken;
+- data flow: does the source actually hold the field the plan groups or
+  filters on?
+- numbers: is a threshold realistic against a real figure?
+- auth: does the router carry the guard the draft assumes?
+
+Cite what you found (`file:line`, command output). "Probably" means you
+haven't checked. Knowledge answers are fine where code can't decide; name
+the source. An answer that changes the draft is the good outcome: edit the
+draft. Resolve upstream decisions before the ones that depend on them.
 
 ## 3. Triage
 
-Each question ends in exactly one bucket:
+Each question lands in one bucket:
 
-1. **Resolved** — evidence settled it. Fix the draft, say nothing.
-2. **Decision** — real options existed and you picked one. Goes in the digest.
-3. **Must-ask** — you cannot decide: it's a user preference, the wrong guess
-   is costly or externally visible, and evidence cannot settle it.
+1. **Resolved**: evidence settled it. Fix the draft.
+2. **Decision**: real options existed and you picked one. Goes in the digest.
+3. **Must-ask**: a user preference where the wrong guess is costly and
+   evidence can't settle it.
 
-The must-ask bar is high: ask if and only if a sensible default does not
-exist. "I'd rather the user confirm" is not a reason; recommend the default
-and proceed. Never re-ask something the user already decided.
+Ask only when no sensible default exists. Never re-ask what the user
+already decided.
 
 ## 4. Present
 
-The user sees two things, both short:
+- **Premise**: "Your model: …" then "Where it breaks: …", said plainly
+  with the evidence. Never open with "you're right".
+- **Decision digest**: at most 7 lines, one per decision, what you chose
+  and why in plain words.
+- **Must-ask questions**: batched in one AskUserQuestion call (max 4,
+  recommended option first) or, with a canvas plan open, question blocks
+  with a recommended default.
 
-- **Decision digest** — at most 7 lines, one per decision: what you chose
-  and why, in plain language. No jargon from your working notes, no raw Q&A
-  dump. If a decision needs more than a line, it may belong in must-ask.
-- **Must-ask questions** — batched, not dribbled: one AskUserQuestion call
-  (max 4, recommended option first) or, when a canvas plan is open,
-  question blocks in the plan with a recommended default marked.
+Keep the full question list in working notes or a collapsed canvas section;
+never lead with it.
 
-Keep the full question list in your working notes (or a collapsed section of
-the canvas artifact) in case the user wants to see the grilling — but never
-lead with it. Overwhelming the reader with your process defeats the point:
-the grilling is for you; the digest is for them.
+Stop before implementation. This skill ends at a tightened plan and
+answered questions; wait for the go-ahead to build.

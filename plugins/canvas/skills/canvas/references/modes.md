@@ -35,6 +35,15 @@ compare use the `.qopt` thumb/meta markup (`references/document-quality.md`);
 exactly one option per single-choice question can carry `data-lean` to mark
 Claude's pick — the badge renders from the attribute, never from prose.
 
+**Decision first.** The first card on the page is the decision: the question,
+Claude's pick (`data-lean`), and one plain line on what it costs to undo.
+Background follows, or moves to a second page. Pick each visual by the
+"Pick the medium" chooser in `document-quality.md`.
+
+**Page discipline.** Add a page only for a new decision or a new visual.
+Otherwise update the existing page in place, keeping block ids stable.
+Reviewers lose time to page sprawl, not to long pages.
+
 **Plan = gated deck.** A deck that needs sign-off before code keeps the
 one-screen budget, puts every open decision near the top as a question block,
 and ends with a short block naming what approval unblocks. The full recipe —
