@@ -1,6 +1,6 @@
 {
   "name": "foreman",
-  "description": "Orchestrated implementation workflow — foreman: plan on canvas, get approval, delegate work items to Opus/Sonnet subagents (in-process or in herdr tabs) under strict TDD; grill-me: adversarial self-review of a draft before the user sees it.",
+  "description": "foreman: default entry for non-trivial build, plan, fix, design and \"give me a prompt\" requests; picks a path (answer, decide, build, handoff), runs a standing brief, plans on canvas for approval, then delegates to Haiku/Sonnet/Opus workers in herdr tabs under strict TDD. grill-me: challenges the user's premise and the draft against evidence before anyone builds on it.",
   "author": {
     "name": "Vasu Sheoran",
     "email": "vasusheoran92@gmail.com"
